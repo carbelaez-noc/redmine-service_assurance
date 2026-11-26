@@ -22,10 +22,10 @@
 .sa-snap .full{grid-column:1/-1}
 .sa-cierre{grid-template-columns:repeat(3,1fr);border-top:2px solid #e2e5e9;padding-top:6px}
 .sa-fila3{grid-template-columns:repeat(3,1fr)}
-.sa-line{display:flex;gap:20px;overflow-x:auto;margin:10px 0;padding:2px}
-.sa-line>div{flex:0 0 auto;min-width:90px}
+.sa-line{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.sa-line>div{background:#f4f6f9;border-radius:10px;padding:7px 14px;flex:1 1 150px;max-width:100%}
 .sa-line>div span{display:block;font-size:10px;color:#8a94a0;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:1px}
-.sa-line>div{font-size:13.5px;color:#111}
+.sa-line>div{font-size:13px;color:#111}
 .sa-flow{margin-top:10px;padding-top:8px;border-top:1px solid #ddd;display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end}
 .sa-flow .sa-btn{font-size:12.5px;padding:4px 12px;border-radius:6px;border:1px solid #cfd4d9;background:#fff;cursor:pointer}
 .sa-flow .sa-btn.primary{background:#1f6feb;border-color:#1f6feb;color:#fff;font-weight:600}
@@ -134,13 +134,15 @@ dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 
 <% if flow.include?('discard') %><button type="button" class="sa-btn danger" id="btn-discard">No aplica</button><% end %>
 <% if flow.include?('close_accepted') && @can_conciliate %><button type="button" class="sa-btn" id="btn-accept">Cerrar: reconocida</button><% end %>
 <% if flow.include?('close_rejected') && @can_conciliate %><button type="button" class="sa-btn danger" id="btn-reject">Cerrar: rechazada</button><% end %>
+<span id="sa-saved"></span>
+</div>
+<% end %>
 <% if @sa_case.final? %>
+<div class="sa-flow">
   <span>Caso finalizado: <strong><%= @evaluation.result.presence || @sa_case.status %></strong></span>
   <% if @can_reopen %>
     <%= form_tag("/service_assurance/cases/#{@sa_case.id}/reopen", method: :post, style: 'display:inline') do %><%= submit_tag 'Reabrir', class: 'sa-btn' %><% end %>
   <% end %>
-<% end %>
-<span id="sa-saved"></span>
 </div>
 <% end %>
 
