@@ -1,18 +1,40 @@
+<style>
+.sa-filters{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:flex-end;background:#fafbfc;border:1px solid #e2e5e9;border-radius:8px;padding:10px 14px;margin:8px 0 12px}
+.sa-filters .f{display:flex;flex-direction:column;gap:2px}
+.sa-filters label{font-size:11px;color:#5b6570;font-weight:bold;text-transform:uppercase;letter-spacing:.03em}
+.sa-filters select,.sa-filters input[type=date]{border:1px solid #cfd4d9;border-radius:6px;padding:4px 8px;font-size:13px;background:#fff;max-width:190px}
+.sa-filters .actions{display:flex;gap:8px;align-items:center}
+.sa-btn{border:1px solid #1f6feb;background:#1f6feb;color:#fff;border-radius:6px;padding:5px 14px;font-size:13px;cursor:pointer;font-weight:600}
+.sa-btn:hover{background:#1a5fd0}
+.sa-btn.secondary{background:#fff;color:#1f6feb}
+.sa-btn.secondary:hover{background:#eef4ff}
+</style>
 <h2>Service Assurance</h2>
-<%= form_tag('/service_assurance', method: :get) do %>
-  <label>Estado</label>
-  <%= select_tag 'sa_status', options_for_select([['Abiertos (pendientes + en curso)', '']] + ServiceAssuranceCase::STATUSES.map { |s| [s, s] }, @status_filter) %>
-  <label>Carrier</label>
-  <%= text_field_tag 'sa_carrier', @carrier_filter, size: 15 %>
-  <label>Evaluador (id)</label>
-  <%= text_field_tag 'sa_eval', @eval_filter, size: 6 %>
-  <label>Desde</label>
-  <%= date_field_tag 'sa_from', @from %>
-  <label>Hasta</label>
-  <%= date_field_tag 'sa_to', @to %>
-  <%= submit_tag 'Filtrar', name: nil %>
-  <%= link_to 'Exportar XLSX (periodo)', "/service_assurance/cases/export?sa_from=#{@from}&sa_to=#{@to}&sa_carrier=#{@carrier_filter}", class: 'icon icon-excel' %>
+<%= form_tag('/service_assurance', method: :get, id: 'sa-filter-form') do %>
+<div class="sa-filters">
+  <div class="f"><label>Estado</label>
+  <%= select_tag 'sa_status', options_for_select([['Abiertos (pendientes + en curso)', '']] + ServiceAssuranceCase::STATUSES.map { |s| [s, s] }, @status_filter) %></div>
+  <div class="f"><label>Carrier</label>
+  <%= select_tag 'sa_carrier', options_for_select([['— todos —', '']] + @carrier_options.map { |c| [c, c] }, @carrier_filter) %></div>
+  <div class="f"><label>Evaluador</label>
+  <%= select_tag 'sa_eval', options_for_select([['— todos —', '']] + @evaluator_options, @eval_filter) %></div>
+  <div class="f"><label>Desde</label>
+  <%= date_field_tag 'sa_from', @from %></div>
+  <div class="f"><label>Hasta</label>
+  <%= date_field_tag 'sa_to', @to %></div>
+  <div class="actions">
+  <%= submit_tag 'Filtrar', name: nil, class: 'sa-btn secondary' %>
+  <button type="button" class="sa-btn" id="sa-export-btn">Exportar XLSX</button>
+  </div>
+</div>
 <% end %>
+<script>
+document.getElementById('sa-export-btn').addEventListener('click',function(){
+  var f=document.getElementById('sa-filter-form');
+  var q=function(n){var el=f.querySelector('[name='+n+']');return el?encodeURIComponent(el.value):'';};
+  location.href='/service_assurance/cases/export?sa_from='+q('sa_from')+'&sa_to='+q('sa_to')+'&sa_carrier='+q('sa_carrier');
+});
+</script>
 <% if @issues.nil? %>
   <p class="nodata">Configure el campo de activación en Administración → ajustes del plugin.</p>
 <% elsif @issues.empty? %>

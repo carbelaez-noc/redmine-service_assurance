@@ -52,6 +52,12 @@ module ServiceAssurance
       @issues = scope.order('issues.closed_on DESC').limit(@limit).offset(@paginator.offset).to_a
       cases = ServiceAssuranceCase.where(issue_id: @issues.map(&:id)).includes(:evaluation, :assignee).to_a
       @case_by_issue = cases.index_by(&:issue_id)
+      evaluated = ServiceAssuranceEvaluation.where.not(provider: [nil, '']).distinct.pluck(:provider).map(&:to_s).map(&:strip).reject(&:empty?).uniq
+      @carrier_options = (FibrazoServiceAssurance::SettingsResolver.carrier_options | evaluated).first(200)
+      assignee_ids = ServiceAssuranceCase.where.not(assignee_id: nil).distinct.pluck(:assignee_id)
+      @evaluator_options = User.where(id: assignee_ids).order(:firstname).map do |u|
+        ["#{u.firstname} #{u.lastname} (#{u.login})".strip, u.id]
+      end
     end
 
     def show
