@@ -20,13 +20,16 @@
 .sa-snap div{border-bottom:1px dotted #e0e0e0;padding:3px 0}
 .sa-snap span{display:block;font-size:10.5px;color:#5b6570;font-weight:bold;text-transform:uppercase;letter-spacing:.03em}
 .sa-snap .full{grid-column:1/-1}
-.sa-cierre{grid-template-columns:repeat(4,1fr);border-top:2px solid #e2e5e9;padding-top:6px}
-.sa-flow{margin-top:10px;padding-top:8px;border-top:1px solid #ddd;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.sa-cierre{grid-template-columns:repeat(3,1fr);border-top:2px solid #e2e5e9;padding-top:6px}
+.sa-fila3{grid-template-columns:repeat(3,1fr)}
+.sa-flow{margin-top:10px;padding-top:8px;border-top:1px solid #ddd;display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end}
 .sa-flow .sa-btn{font-size:12.5px;padding:4px 12px;border-radius:6px;border:1px solid #cfd4d9;background:#fff;cursor:pointer}
 .sa-flow .sa-btn.primary{background:#1f6feb;border-color:#1f6feb;color:#fff;font-weight:600}
 .sa-flow .sa-btn.primary:hover{background:#1a5fd0}
 .sa-flow .sa-btn:hover{background:#eef4ff}
 .sa-flow .sa-btn.danger{color:#b3261e}
+.sa-flow .sa-btn.go{background:#2e7d32;border-color:#2e7d32;color:#fff;font-weight:600}
+.sa-flow .sa-btn.go:hover{background:#256a29}
 .sa-mini{border:1px solid #cfd4d9;background:#fff;border-radius:4px;padding:1px 5px;cursor:pointer;font-size:12px;line-height:1.2}
 .sa-mini:hover{background:#eef4ff}
 #sa-saved{color:#155724;font-weight:bold}
@@ -39,12 +42,12 @@ dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 
 .sa-subnav{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
 .sa-subnav a{display:inline-block;padding:4px 12px;border:1px solid #cfd4d9;border-radius:6px;background:#fff;text-decoration:none;font-size:12.5px;color:#1f6feb;font-weight:600}
 .sa-subnav a:hover{background:#eef4ff;text-decoration:none}
-@media (max-width:800px){.sa-grid{grid-template-columns:1fr}.sa-cierre{grid-template-columns:1fr 1fr}}
+@media (max-width:800px){.sa-grid{grid-template-columns:1fr}.sa-cierre,.sa-fila3{grid-template-columns:1fr 1fr}}
 </style>
 <h2>Service Assurance — Caso #<%= @sa_case.id %> (ticket <%= link_to issue_folio(@issue), issue_path(@issue) %>)</h2>
-<div class="sa-subnav"><%= link_to '← Volver a la bandeja', service_assurance_path %> <%= link_to 'Ver todos los casos', '/service_assurance?sa_status=' %> <%= link_to 'Abrir ticket en otra pestaña', issue_path(@issue), target: '_blank' %></div>
+<div class="sa-subnav"><%= link_to '← Volver a la bandeja', service_assurance_path %> <%= link_to 'Ver todos los casos', '/service_assurance?sa_status=' %> <%= link_to 'Abrir ticket en otra pestaña', issue_path(@issue), target: '_blank' %> <a href="#sa-audit">Ver auditoría</a></div>
 <div class="sa-snap">
-  <div><span>Ticket</span><%= link_to issue_folio(@issue), issue_path(@issue) %> — <%= @issue.subject %></div>
+  <div class="full"><span>Ticket</span><%= link_to issue_folio(@issue), issue_path(@issue) %> — <%= @issue.subject %></div>
   <div><span>Estado</span><%= sa_status_label(@sa_case.status) %></div>
   <div><span>Evaluador</span><%= assignee_name(@sa_case) %></div>
   <div><span>Antigüedad</span><%= @sa_case.age_days ? "#{@sa_case.age_days} días" : '—' %></div>
@@ -55,7 +58,6 @@ dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 
 <button type="button" data-tab="panel-a" class="<%= @tab_states[:a] ? 'ok' : 'todo' %> active">A. Ticket</button>
 <button type="button" data-tab="panel-b" class="<%= @tab_states[:b] ? 'ok' : 'todo' %>">B. Evaluación y contractual</button>
 <% if %w[por_conciliar conciliado].include?(@sa_case.status) %><button type="button" data-tab="panel-d" class="<%= @tab_states[:d] ? 'ok' : 'todo' %>">C. Conciliación</button><% end %>
-<button type="button" data-tab="panel-f" class="ok">Auditoría</button>
 </div>
 
 <section class="sa-panel active" id="panel-a">
@@ -63,12 +65,19 @@ dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 
   <p><strong>Asunto:</strong> <%= @issue.subject %></p>
   <% snap = @sa_case.original_snapshot || {} %>
   <% if snap.any? %>
-  <% labels = { 'ciudad' => 'Ciudad', 'inicio' => 'Inicio de falla', 'fin' => 'Fin de falla', 'clientes' => 'Clientes afectados', 'carrier' => 'Carrier', 'caso_isp' => '# Caso ISP', 'motivo_apertura' => 'Motivo de apertura' } %>
-  <% cierre = { 'categoria' => 'Categoría de cierre', 'subcategoria' => 'Subcategoría de cierre', 'motivo' => 'Motivo de cierre', 'id_externo' => 'ID externo' } %>
+  <% labels = { 'ciudad' => 'Ciudad', 'inicio' => 'Inicio de falla', 'fin' => 'Fin de falla', 'clientes' => 'Clientes afectados', 'motivo_apertura' => 'Motivo de apertura' } %>
+  <% fila3 = { 'carrier' => 'Carrier', 'caso_isp' => '# Caso ISP', 'id_externo' => 'ID externo' } %>
+  <% cierre = { 'categoria' => 'Categoría de cierre', 'subcategoria' => 'Subcategoría de cierre', 'motivo' => 'Motivo de cierre' } %>
   <div class="sa-snap">
     <% labels.each do |key, label| %>
       <% raw = snap.dig(key, 'raw') %>
       <div class="<%= key == 'motivo_apertura' ? 'full' : '' %>"><span><%= label %></span><%= FibrazoServiceAssurance::PreloadMap.display(raw) %></div>
+    <% end %>
+  </div>
+  <div class="sa-snap sa-fila3">
+    <% fila3.each do |key, label| %>
+      <% raw = snap.dig(key, 'raw') %>
+      <div><span><%= label %></span><%= FibrazoServiceAssurance::PreloadMap.display(raw) %></div>
     <% end %>
   </div>
   <div class="sa-snap sa-cierre">
@@ -105,7 +114,6 @@ dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 
     <%= f.datetime_field :contract_end_at, value: @evaluation.contract_end_at, id: 'ev-contract-end' %></div>
   <div><label>Indisponibilidad (min)</label><%= f.number_field :downtime_minutes, value: @evaluation.downtime_minutes, id: 'ev-downtime', readonly: true %></div>
   <div><label>&nbsp;</label><button type="button" class="sa-mini" id="pull-both" title="Traer inicio y fin de falla del ticket">↙ Traer fechas del ticket</button></div>
-  <div class="full"><label>Exclusiones</label><%= f.text_area :exclusions, value: @evaluation.exclusions, rows: 2 %></div>
   <div class="full"><label>Observaciones</label><%= f.text_area :observations, value: @evaluation.observations, rows: 4 %></div>
 </div>
 <p class="sa-hint">* El escalamiento es obligatorio para avanzar. Las fechas no aceptan futuro ni anteriores al inicio de la falla.</p>
@@ -132,9 +140,8 @@ dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 
 <div class="sa-flow">
 <input type="hidden" name="transition" id="sa-transition" value="save">
 <% if flow.include?('save') %><button type="submit" class="sa-btn primary" data-t="save">Guardar avance</button><% end %>
-<% if flow.include?('to_review') %><button type="submit" class="sa-btn" data-t="to_review">Enviar a revisión</button><% end %>
 <% if flow.include?('to_conciliate') && @can_conciliate %><button type="submit" class="sa-btn" data-t="to_conciliate">Enviar a conciliación</button><% end %>
-<% if flow.include?('discard') %><button type="submit" class="sa-btn" data-t="discard" data-confirm="Marcar como no aplica?">No aplica</button><% end %>
+<% if flow.include?('discard') %><button type="button" class="sa-btn danger" id="btn-discard">No aplica</button><% end %>
 <% if flow.include?('close_accepted') && @can_conciliate %><button type="button" class="sa-btn" id="btn-accept">Cerrar: reconocida</button><% end %>
 <% if flow.include?('close_rejected') && @can_conciliate %><button type="button" class="sa-btn danger" id="btn-reject">Cerrar: rechazada</button><% end %>
 <% if @sa_case.final? %>
@@ -167,8 +174,17 @@ dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 
     <button type="button" id="dlg-rej-cancel" class="sa-btn">Cancelar</button>
   </menu>
 </dialog>
+<dialog id="dlg-discard" class="sa-dlg">
+  <h3>Marcar como no aplica</h3>
+  <p class="sa-hint">Motivo obligatorio. Se limpia la decisión de ANS.</p>
+  <label>Motivo *</label><textarea id="dlg-dis-motivo" rows="3" required></textarea>
+  <menu>
+    <button type="button" id="dlg-dis-ok" class="sa-btn primary">Confirmar</button>
+    <button type="button" id="dlg-dis-cancel" class="sa-btn">Cancelar</button>
+  </menu>
+</dialog>
 
-<section class="sa-panel" id="panel-f">
+<section id="sa-audit">
 <h3>Auditoría</h3>
 <table class="list">
   <thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Campo</th><th>Antes</th><th>Después</th></tr></thead>
@@ -253,8 +269,8 @@ function saLimits(){
 document.querySelectorAll('.sa-flow button[data-t]').forEach(function(b){
   b.addEventListener('click',function(){document.getElementById('sa-transition').value=b.getAttribute('data-t');});
 });
-var dlgA=document.getElementById('dlg-accept'),dlgR=document.getElementById('dlg-reject');
-var btnA=document.getElementById('btn-accept'),btnR=document.getElementById('btn-reject');
+var dlgA=document.getElementById('dlg-accept'),dlgR=document.getElementById('dlg-reject'),dlgD=document.getElementById('dlg-discard');
+var btnA=document.getElementById('btn-accept'),btnR=document.getElementById('btn-reject'),btnD=document.getElementById('btn-discard');
 if(btnA){btnA.addEventListener('click',function(){
   document.getElementById('dlg-acc-date').value=(document.querySelector('[name="evaluation[reported_on]"]')||{}).value||'';
   document.getElementById('dlg-acc-min').value=(document.getElementById('ev-ack')||{}).value||'';
@@ -267,6 +283,20 @@ if(btnR){btnR.addEventListener('click',function(){
 });}
 document.getElementById('dlg-acc-cancel').addEventListener('click',function(){dlgA.close();});
 document.getElementById('dlg-rej-cancel').addEventListener('click',function(){dlgR.close();});
+if(btnD){btnD.addEventListener('click',function(){
+  document.getElementById('dlg-dis-motivo').value=(document.querySelector('[name="evaluation[conciliation_notes]"]')||{}).value||'';
+  dlgD.showModal();
+});}
+document.getElementById('dlg-dis-cancel').addEventListener('click',function(){dlgD.close();});
+document.getElementById('dlg-dis-ok').addEventListener('click',function(){
+  var mo=document.getElementById('dlg-dis-motivo').value;
+  if(!mo.trim()){alert('Indique el motivo');return;}
+  var notes=document.querySelector('[name="evaluation[conciliation_notes]"]');
+  if(notes)notes.value=mo;
+  dlgD.close();
+  document.getElementById('sa-transition').value='discard';
+  document.getElementById('sa-form').submit();
+});
 document.getElementById('dlg-acc-ok').addEventListener('click',function(){
   var d=document.getElementById('dlg-acc-date').value,m=document.getElementById('dlg-acc-min').value;
   if(!d){alert('Indique la fecha de reporte / envío');return;}

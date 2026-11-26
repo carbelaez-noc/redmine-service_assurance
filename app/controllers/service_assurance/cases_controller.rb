@@ -101,9 +101,9 @@ module ServiceAssurance
       'discard' => 'no_aplica'
     }.freeze
 
-    # Flujo lineal: cada estado solo ofrece sus siguientes.
+    # Flujo lineal: pendiente va directo a conciliación (sin revisión intermedia).
     TRANSITION_FLOW = {
-      'pendiente' => %w[save to_review discard],
+      'pendiente' => %w[save to_conciliate discard],
       'en_revision' => %w[save to_conciliate discard],
       'por_conciliar' => %w[save close_accepted close_rejected],
       'conciliado' => [],
@@ -149,6 +149,15 @@ module ServiceAssurance
         end
         if transition == 'close_rejected' && @evaluation.conciliation_notes.to_s.strip.empty?
           return update_fail('Cierre rechazado requiere motivo')
+        end
+        if transition == 'discard'
+          return update_fail('Indique el motivo de no aplica') if @evaluation.conciliation_notes.to_s.strip.empty?
+          if !@evaluation.ans_applies.nil? || !@evaluation.conciliation_applies.nil?
+            changed << ['ans_applies', @evaluation.ans_applies, nil]
+            changed << ['conciliation_applies', @evaluation.conciliation_applies, nil]
+            @evaluation.ans_applies = nil
+            @evaluation.conciliation_applies = nil
+          end
         end
       elsif @sa_case.final? && !allowed?(:reopen_service_assurance)
         return update_fail('Evaluación finalizada: requiere permiso de reapertura')
