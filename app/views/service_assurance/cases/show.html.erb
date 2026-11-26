@@ -1,10 +1,9 @@
 <style>
-.sa-tabbar{display:flex;gap:2px;flex-wrap:wrap;margin:6px 0;border-bottom:2px solid #e2e5e9}
-.sa-tabbar button{padding:6px 10px;border:none;background:none;cursor:pointer;font-size:13px;color:#444;font-weight:600;border-bottom:2px solid transparent;margin-bottom:-2px}
-.sa-tabbar button .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:1px}
-.sa-tabbar button .dot.ok{background:#2e7d32}
-.sa-tabbar button .dot.todo{background:#d32f2f}
-.sa-tabbar button.active{border-bottom-color:#2b7cd3;color:#111}
+.sa-tabbar{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+.sa-tabbar button{padding:6px 12px;border:1px solid #d5d9de;border-radius:7px;background:#f7f8f9;cursor:pointer;font-size:13px;color:#444;font-weight:600}
+.sa-tabbar button.todo{background:#f8d7da;border-color:#f2b8c1;color:#721c24}
+.sa-tabbar button.ok{background:#d9ead3;border-color:#b6d7a8;color:#274e13}
+.sa-tabbar button.active{box-shadow:inset 0 3px 0 #2b7cd3}
 .sa-panel{display:none;padding:10px 2px}
 .sa-panel.active{display:block}
 .sa-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px 16px}
@@ -30,19 +29,22 @@
 .sa-mini{border:1px solid #cfd4d9;background:#fff;border-radius:4px;padding:1px 5px;cursor:pointer;font-size:12px;line-height:1.2}
 .sa-mini:hover{background:#eef4ff}
 #sa-saved{color:#155724;font-weight:bold}
+.sa-subnav{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+.sa-subnav a{display:inline-block;padding:4px 12px;border:1px solid #cfd4d9;border-radius:6px;background:#fff;text-decoration:none;font-size:12.5px;color:#1f6feb;font-weight:600}
+.sa-subnav a:hover{background:#eef4ff;text-decoration:none}
 @media (max-width:800px){.sa-grid{grid-template-columns:1fr}}
 </style>
 <h2>Service Assurance — Caso #<%= @sa_case.id %> (ticket <%= link_to issue_folio(@issue), issue_path(@issue) %>)</h2>
-<p><%= link_to '← Volver a la bandeja', service_assurance_path %> · <%= link_to 'Ver todos los casos', '/service_assurance?sa_status=' %> · <%= link_to 'Abrir ticket en otra pestaña', issue_path(@issue), target: '_blank' %></p>
+<div class="sa-subnav"><%= link_to '← Volver a la bandeja', service_assurance_path %> <%= link_to 'Ver todos los casos', '/service_assurance?sa_status=' %> <%= link_to 'Abrir ticket en otra pestaña', issue_path(@issue), target: '_blank' %></div>
 <p><strong>Estado SA:</strong> <%= @sa_case.status %> · <strong>Evaluador:</strong> <%= @sa_case.assignee ? @sa_case.assignee.login : '—' %> · <strong>Antigüedad:</strong> <%= @sa_case.age_days ? "#{@sa_case.age_days} días" : '—' %> · <strong>Ticket:</strong> <%= issue_folio(@issue) %> — <%= @issue.subject %></p>
 
 <div class="sa-tabs">
 <div class="sa-tabbar">
-<button type="button" data-tab="panel-a" class="active"><span class="dot <%= @tab_states[:a] ? 'ok' : 'todo' %>"></span>A. Ticket</button>
-<button type="button" data-tab="panel-b"><span class="dot <%= @tab_states[:b] ? 'ok' : 'todo' %>"></span>B. Evaluación</button>
-<button type="button" data-tab="panel-c"><span class="dot <%= @tab_states[:c] ? 'ok' : 'todo' %>"></span>C. Contractual</button>
-<button type="button" data-tab="panel-d"><span class="dot <%= @tab_states[:d] ? 'ok' : 'todo' %>"></span>D. Conciliación</button>
-<button type="button" data-tab="panel-f"><span class="dot ok"></span>Auditoría</button>
+<button type="button" data-tab="panel-a" class="<%= @tab_states[:a] ? 'ok' : 'todo' %> active">A. Ticket</button>
+<button type="button" data-tab="panel-b" class="<%= @tab_states[:b] ? 'ok' : 'todo' %>">B. Evaluación</button>
+<button type="button" data-tab="panel-c" class="<%= @tab_states[:c] ? 'ok' : 'todo' %>">C. Contractual</button>
+<button type="button" data-tab="panel-d" class="<%= @tab_states[:d] ? 'ok' : 'todo' %>">D. Conciliación</button>
+<button type="button" data-tab="panel-f" class="ok">Auditoría</button>
 </div>
 
 <section class="sa-panel active" id="panel-a">
@@ -220,8 +222,8 @@ function saApplyTabs(ts){
   Object.keys(map).forEach(function(k){
     var btn=document.querySelector('.sa-tabbar button[data-tab="'+map[k]+'"]');
     if(!btn)return;
-    var dot=btn.querySelector('.dot');
-    if(dot){dot.classList.remove('ok','todo');dot.classList.add(ts[k]?'ok':'todo');}
+    btn.classList.remove('ok','todo');
+    btn.classList.add(ts[k]?'ok':'todo');
   });
 }
 document.querySelectorAll('.sa-flow button[data-t]').forEach(function(b){
