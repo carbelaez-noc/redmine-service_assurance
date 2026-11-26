@@ -20,6 +20,7 @@
 .sa-snap div{border-bottom:1px dotted #e0e0e0;padding:3px 0}
 .sa-snap span{display:block;font-size:10.5px;color:#5b6570;font-weight:bold;text-transform:uppercase;letter-spacing:.03em}
 .sa-snap .full{grid-column:1/-1}
+.sa-cierre{grid-template-columns:repeat(4,1fr);border-top:2px solid #e2e5e9;padding-top:6px}
 .sa-flow{margin-top:10px;padding-top:8px;border-top:1px solid #ddd;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .sa-flow .sa-btn{font-size:12.5px;padding:4px 12px;border-radius:6px;border:1px solid #cfd4d9;background:#fff;cursor:pointer}
 .sa-flow .sa-btn.primary{background:#1f6feb;border-color:#1f6feb;color:#fff;font-weight:600}
@@ -38,7 +39,7 @@ dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 
 .sa-subnav{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
 .sa-subnav a{display:inline-block;padding:4px 12px;border:1px solid #cfd4d9;border-radius:6px;background:#fff;text-decoration:none;font-size:12.5px;color:#1f6feb;font-weight:600}
 .sa-subnav a:hover{background:#eef4ff;text-decoration:none}
-@media (max-width:800px){.sa-grid{grid-template-columns:1fr}}
+@media (max-width:800px){.sa-grid{grid-template-columns:1fr}.sa-cierre{grid-template-columns:1fr 1fr}}
 </style>
 <h2>Service Assurance — Caso #<%= @sa_case.id %> (ticket <%= link_to issue_folio(@issue), issue_path(@issue) %>)</h2>
 <div class="sa-subnav"><%= link_to '← Volver a la bandeja', service_assurance_path %> <%= link_to 'Ver todos los casos', '/service_assurance?sa_status=' %> <%= link_to 'Abrir ticket en otra pestaña', issue_path(@issue), target: '_blank' %></div>
@@ -58,15 +59,22 @@ dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 
 </div>
 
 <section class="sa-panel active" id="panel-a">
-<h3>A. Información original del ticket (solo lectura)</h3>
+<h3>A. Información original del ticket</h3>
   <p><strong>Asunto:</strong> <%= @issue.subject %></p>
   <% snap = @sa_case.original_snapshot || {} %>
   <% if snap.any? %>
-  <% labels = { 'ciudad' => 'Ciudad', 'inicio' => 'Inicio de falla', 'fin' => 'Fin de falla', 'clientes' => 'Clientes afectados', 'carrier' => 'Carrier', 'caso_isp' => '# Caso ISP', 'motivo_apertura' => 'Motivo de apertura', 'categoria' => 'Categoría de cierre', 'subcategoria' => 'Subcategoría de cierre', 'motivo' => 'Motivo de cierre', 'id_externo' => 'ID externo' } %>
+  <% labels = { 'ciudad' => 'Ciudad', 'inicio' => 'Inicio de falla', 'fin' => 'Fin de falla', 'clientes' => 'Clientes afectados', 'carrier' => 'Carrier', 'caso_isp' => '# Caso ISP', 'motivo_apertura' => 'Motivo de apertura' } %>
+  <% cierre = { 'categoria' => 'Categoría de cierre', 'subcategoria' => 'Subcategoría de cierre', 'motivo' => 'Motivo de cierre', 'id_externo' => 'ID externo' } %>
   <div class="sa-snap">
     <% labels.each do |key, label| %>
       <% raw = snap.dig(key, 'raw') %>
-      <div class="<%= key == 'motivo' ? 'full' : '' %>"><span><%= label %></span><%= FibrazoServiceAssurance::PreloadMap.display(raw) %></div>
+      <div class="<%= key == 'motivo_apertura' ? 'full' : '' %>"><span><%= label %></span><%= FibrazoServiceAssurance::PreloadMap.display(raw) %></div>
+    <% end %>
+  </div>
+  <div class="sa-snap sa-cierre">
+    <% cierre.each do |key, label| %>
+      <% raw = snap.dig(key, 'raw') %>
+      <div><span><%= label %></span><%= FibrazoServiceAssurance::PreloadMap.display(raw) %></div>
     <% end %>
   </div>
   <% end %>
@@ -176,17 +184,18 @@ dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 
 function saMin(a,b){if(!a||!b)return null;var ms=new Date(b)-new Date(a);if(isNaN(ms)||ms<=0)return null;return Math.round(ms/60000);}
 function saHuman(m){if(m==null)return '—';var h=Math.floor(m/60);return h>0?h+'h '+(m%60)+'m ('+m+' min)':m+' min';}
 function saToLocal(v){if(!v)return '';var d=new Date(v.replace(' ','T'));if(isNaN(d))return '';var p=function(n){return (n<10?'0':'')+n;};return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes());}
+function saEl(id){return document.getElementById(id);}
 function saCalc(){
-  var cs=document.getElementById('ev-contract-start'),ce=document.getElementById('ev-contract-end');
+  var cs=saEl('ev-contract-start'),ce=saEl('ev-contract-end');
   var cm=saMin(cs&&cs.value,ce&&ce.value);
-  document.getElementById('calc-contract').textContent=(cm==null)?'—':cm+' min';
-  document.getElementById('calc-contract-h').textContent=saHuman(cm);
-  var dtEl=document.getElementById('ev-downtime');
+  var cc=saEl('calc-contract');if(cc)cc.textContent=(cm==null)?'—':cm+' min';
+  var ch=saEl('calc-contract-h');if(ch)ch.textContent=saHuman(cm);
+  var dtEl=saEl('ev-downtime');
   if(cm!=null&&dtEl)dtEl.value=cm;
-  var ak=parseInt((document.getElementById('ev-ack')||{}).value,10);
-  var df=document.getElementById('ev-diff');
+  var ak=parseInt(((saEl('ev-ack'))||{}).value,10);
+  var df=saEl('ev-diff');
   var dv=(cm!=null&&!isNaN(ak))?(cm-ak):parseInt((df||{}).value,10);
-  document.getElementById('calc-diff').textContent=(!isNaN(dv)&&dv!=null)?(dv+' min'):'—';
+  var cd=saEl('calc-diff');if(cd)cd.textContent=(!isNaN(dv)&&dv!=null)?(dv+' min'):'—';
   if(cm!=null&&!isNaN(ak)&&df)df.value=cm-ak;
 }
 var saTimer=null;
