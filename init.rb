@@ -20,7 +20,7 @@ Redmine::Plugin.register :fibrazo_service_assurance do
     'api_read_enabled' => '0',
     'cf_ciudad' => '', 'cf_inicio' => '', 'cf_fin' => '', 'cf_clientes' => '',
     'cf_carrier' => '', 'cf_caso_isp' => '', 'cf_categoria' => '',
-    'cf_subcategoria' => '', 'cf_motivo' => '', 'cf_id_externo' => '',
+    'cf_subcategoria' => '', 'cf_motivo' => '', 'cf_motivo_apertura' => '', 'cf_id_externo' => '',
     'carrier_list' => ''
   }, partial: 'settings/fibrazo_service_assurance_settings'
 

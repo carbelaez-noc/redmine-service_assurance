@@ -42,7 +42,7 @@ document.getElementById('sa-export-btn').addEventListener('click',function(){
 <% else %>
   <span class="pagination"><%= pagination_links_full(@paginator, @issue_count) %></span>
   <table class="list issues">
-    <thead><tr><th>#</th><th>Asunto</th><th>Proyecto</th><th>Cerrado</th><th>Antig.</th><th>Estado SA</th><th>Carrier</th><th>Evaluador</th><th></th></tr></thead>
+    <thead><tr><th>#</th><th>Asunto</th><th>Proyecto</th><th>Cerrado</th><th>Antig.</th><th>Estado</th><th>Carrier</th><th>Evaluador</th><th></th></tr></thead>
     <tbody>
     <% @issues.each do |issue| %>
       <% sa = @case_by_issue[issue.id] %>
@@ -52,9 +52,9 @@ document.getElementById('sa-export-btn').addEventListener('click',function(){
         <td><%= issue.project.name %></td>
         <td><%= format_time(issue.closed_on) %></td>
         <td><%= sa && sa.age_days ? "#{sa.age_days}d" : '—' %></td>
-        <td><%= sa ? sa.status : 'pendiente por evaluar' %></td>
+        <td><%= sa ? sa_status_label(sa.status) : sa_status_label('pendiente') %></td>
         <td><%= sa&.evaluation&.provider || '—' %></td>
-        <td><%= sa&.assignee ? sa.assignee.login : '—' %></td>
+        <td><%= sa ? assignee_name(sa) : '—' %></td>
         <td>
           <% if sa %>
             <%= link_to 'Abrir', service_assurance_case_path(sa), class: 'icon icon-edit' %>

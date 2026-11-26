@@ -150,11 +150,28 @@ module ServiceAssurance
         @sa_case.assignee_id = User.current.id
         changed << ['assignee', nil, User.current.login]
       end
+      # Sin número de escalamiento no se avanza (guardar sí permite).
+      if transition.present? && transition != 'save' && transition != 'discard' &&
+         @evaluation.external_case.to_s.strip.empty?
+        return update_fail('Requiere número de escalamiento al carrier para avanzar')
+      end
       if @evaluation.real_start_at && @evaluation.real_end_at && @evaluation.real_end_at <= @evaluation.real_start_at
         return update_fail('Fin real debe ser posterior al inicio real')
       end
       if @evaluation.contract_start_at && @evaluation.contract_end_at && @evaluation.contract_end_at <= @evaluation.contract_start_at
         return update_fail('Fin a objetar debe ser posterior al inicio a objetar')
+      end
+      ticket_start = begin
+        Time.zone.parse(@sa_case.original_snapshot.dig('inicio', 'raw').to_s)
+      rescue StandardError
+        nil
+      end
+      now = Time.zone.now
+      { 'Inicio a objetar' => @evaluation.contract_start_at,
+        'Fin a objetar' => @evaluation.contract_end_at }.each do |label, val|
+        next if val.blank?
+        return update_fail("#{label}: no puede ser fecha futura") if val > now
+        return update_fail("#{label}: anterior al inicio de la falla") if ticket_start && val < ticket_start
       end
       # Autoritativos en servidor (el JS solo previsualiza).
       @evaluation.recompute_derived!.each { |f, (o, n)| changed << [f, o, n] }

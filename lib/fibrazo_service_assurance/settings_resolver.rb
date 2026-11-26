@@ -78,14 +78,14 @@ module FibrazoServiceAssurance
       list.first(200)
     end
 
-    # Completitud por pestaña para pintar el estado (rojo pastel = incompleta).
+    # Completitud por pestaña (B fusiona evaluación + contractual).
     def tab_states(_sa_case, evaluation)
       ev = evaluation || ServiceAssuranceEvaluation.new
-      b = ev.provider.present? && ev.real_start_at.present? && ev.real_end_at.present? && !ev.affected_customers.nil?
-      c = !ev.ans_applies.nil? && ev.reported_on.present? && ev.contract_start_at.present? &&
-          ev.contract_end_at.present?
+      b = ev.provider.present? && ev.external_case.present? &&
+          ev.contract_start_at.present? && ev.contract_end_at.present? &&
+          !ev.affected_customers.nil? && !ev.ans_applies.nil? && ev.reported_on.present?
       d = d_complete?(ev)
-      { a: true, b: b, c: c, d: d, f: true }
+      { a: true, b: b, d: d, f: true }
     end
 
     def d_complete?(ev)

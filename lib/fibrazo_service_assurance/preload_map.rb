@@ -15,6 +15,7 @@ module FibrazoServiceAssurance
       'categoria' => 'Categoría cierre',
       'subcategoria' => 'Subcategoría cierre',
       'motivo' => 'Motivo cierre',
+      'motivo_apertura' => 'Motivo de Apertura',
       'id_externo' => 'ID externo'
     }.freeze
 
@@ -60,6 +61,8 @@ module FibrazoServiceAssurance
       out[:external_case] = caso.presence
       out[:real_start_at] = inicio.presence
       out[:real_end_at] = fin.presence
+      out[:contract_start_at] = inicio.presence
+      out[:contract_end_at] = fin.presence
       out[:affected_customers] = clientes.presence
       out
     end

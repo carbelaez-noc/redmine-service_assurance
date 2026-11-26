@@ -36,14 +36,18 @@
 </style>
 <h2>Service Assurance — Caso #<%= @sa_case.id %> (ticket <%= link_to issue_folio(@issue), issue_path(@issue) %>)</h2>
 <div class="sa-subnav"><%= link_to '← Volver a la bandeja', service_assurance_path %> <%= link_to 'Ver todos los casos', '/service_assurance?sa_status=' %> <%= link_to 'Abrir ticket en otra pestaña', issue_path(@issue), target: '_blank' %></div>
-<p><strong>Estado SA:</strong> <%= @sa_case.status %> · <strong>Evaluador:</strong> <%= @sa_case.assignee ? @sa_case.assignee.login : '—' %> · <strong>Antigüedad:</strong> <%= @sa_case.age_days ? "#{@sa_case.age_days} días" : '—' %> · <strong>Ticket:</strong> <%= issue_folio(@issue) %> — <%= @issue.subject %></p>
+<div class="sa-snap">
+  <div><span>Ticket</span><%= link_to issue_folio(@issue), issue_path(@issue) %> — <%= @issue.subject %></div>
+  <div><span>Estado</span><%= sa_status_label(@sa_case.status) %></div>
+  <div><span>Evaluador</span><%= assignee_name(@sa_case) %></div>
+  <div><span>Antigüedad</span><%= @sa_case.age_days ? "#{@sa_case.age_days} días" : '—' %></div>
+</div>
 
 <div class="sa-tabs">
 <div class="sa-tabbar">
 <button type="button" data-tab="panel-a" class="<%= @tab_states[:a] ? 'ok' : 'todo' %> active">A. Ticket</button>
-<button type="button" data-tab="panel-b" class="<%= @tab_states[:b] ? 'ok' : 'todo' %>">B. Evaluación</button>
-<button type="button" data-tab="panel-c" class="<%= @tab_states[:c] ? 'ok' : 'todo' %>">C. Contractual</button>
-<button type="button" data-tab="panel-d" class="<%= @tab_states[:d] ? 'ok' : 'todo' %>">D. Conciliación</button>
+<button type="button" data-tab="panel-b" class="<%= @tab_states[:b] ? 'ok' : 'todo' %>">B. Evaluación y contractual</button>
+<button type="button" data-tab="panel-d" class="<%= @tab_states[:d] ? 'ok' : 'todo' %>">C. Conciliación</button>
 <button type="button" data-tab="panel-f" class="ok">Auditoría</button>
 </div>
 
@@ -52,7 +56,7 @@
   <p><strong>Asunto:</strong> <%= @issue.subject %></p>
   <% snap = @sa_case.original_snapshot || {} %>
   <% if snap.any? %>
-  <% labels = { 'ciudad' => 'Ciudad', 'inicio' => 'Inicio de falla', 'fin' => 'Fin de falla', 'clientes' => 'Clientes afectados', 'carrier' => 'Carrier', 'caso_isp' => '# Caso ISP', 'categoria' => 'Categoría', 'subcategoria' => 'Subcategoría', 'motivo' => 'Motivo', 'id_externo' => 'ID externo' } %>
+  <% labels = { 'ciudad' => 'Ciudad', 'inicio' => 'Inicio de falla', 'fin' => 'Fin de falla', 'clientes' => 'Clientes afectados', 'carrier' => 'Carrier', 'caso_isp' => '# Caso ISP', 'motivo_apertura' => 'Motivo de apertura', 'categoria' => 'Categoría de cierre', 'subcategoria' => 'Subcategoría de cierre', 'motivo' => 'Motivo de cierre', 'id_externo' => 'ID externo' } %>
   <div class="sa-snap">
     <% labels.each do |key, label| %>
       <% raw = snap.dig(key, 'raw') %>
@@ -72,39 +76,31 @@
 <%= form_for :evaluation, url: "/service_assurance/cases/#{@sa_case.id}", html: { method: :patch, id: 'sa-form', 'data-ticket-start' => snap.dig('inicio', 'raw').to_s, 'data-ticket-end' => snap.dig('fin', 'raw').to_s } do |f| %>
 <%= f.hidden_field :lock_version, value: @evaluation.lock_version, id: 'ev-lock' %>
 <section class="sa-panel" id="panel-b">
-<h3>B. Evaluación técnica (precargada, confirmable)</h3>
-<div class="sa-calc">Duración real: <strong id="calc-real">—</strong> · Clientes: <strong><%= @evaluation.affected_customers || '—' %></strong></div>
+<h3>B. Evaluación y datos contractuales</h3>
+<div class="sa-calc">A objetar: <strong id="calc-contract">—</strong> (<strong id="calc-contract-h">—</strong>) · Clientes: <strong><%= @evaluation.affected_customers || '—' %></strong></div>
 <div class="sa-grid">
   <div><label>Proveedor (inventario carrier)</label><%= f.select :provider, [['— seleccionar —', '']] + @carriers.map { |c| [c, c] }, selected: @evaluation.provider %></div>
-  <div><label>Número de escalamiento carrier</label><%= f.text_field :external_case, value: @evaluation.external_case %></div>
+  <div><label>Número de escalamiento carrier *</label><%= f.text_field :external_case, value: @evaluation.external_case, required: true %></div>
   <div><label>Tipo de afectación</label><%= f.select :impact_type, [['— seleccionar —', '']] + (['Falla total', 'Degradación', 'Intermitencia', 'Sin afectación'] | [@evaluation.impact_type.to_s]).reject(&:empty?).map { |v| [v, v] }, selected: @evaluation.impact_type %></div>
-  <div><label>Inicio real</label><%= f.datetime_field :real_start_at, value: @evaluation.real_start_at, id: 'ev-real-start' %></div>
-  <div><label>Fin real</label><%= f.datetime_field :real_end_at, value: @evaluation.real_end_at, id: 'ev-real-end' %></div>
   <div><label>Clientes afectados</label><%= f.number_field :affected_customers, value: @evaluation.affected_customers %></div>
-  <div class="full"><label>Observaciones</label><%= f.text_area :observations, value: @evaluation.observations, rows: 4 %></div>
-</div>
-</section>
-
-<section class="sa-panel" id="panel-c">
-<h3>C. Decisión contractual</h3>
-<div class="sa-calc">Duración a objetar: <strong id="calc-contract">—</strong> · Se calcula sola desde el rango contractual al guardar.</div>
-<div class="sa-grid">
   <div><label>¿Aplica ANS?</label><%= f.select :ans_applies, [['—', ''], ['Sí', true], ['No', false]], selected: @evaluation.ans_applies.nil? ? '' : @evaluation.ans_applies %></div>
-  <div><label>Fecha de reporte / envío al proveedor</label><%= f.date_field :reported_on, value: @evaluation.reported_on %></div>
-  <div><label>Inicio de indisponibilidad a objetar</label>
+  <div><label>Fecha reporte carrier</label><%= f.date_field :reported_on, value: @evaluation.reported_on %></div>
+  <div><label>Inicio a objetar</label>
     <%= f.datetime_field :contract_start_at, value: @evaluation.contract_start_at, id: 'ev-contract-start' %></div>
-  <div><label>Fin de indisponibilidad a objetar</label>
+  <div><label>Fin a objetar</label>
     <%= f.datetime_field :contract_end_at, value: @evaluation.contract_end_at, id: 'ev-contract-end' %></div>
   <div><label>Indisponibilidad (min)</label><%= f.number_field :downtime_minutes, value: @evaluation.downtime_minutes, id: 'ev-downtime', readonly: true %></div>
-  <div><label>&nbsp;</label><button type="button" class="sa-mini" id="pull-both" title="Traer inicio y fin de falla del ticket (CF21/CF22)">↙ Traer fechas del ticket <svg width="11" height="11" viewBox="0 0 16 16"><path d="M8 2v11M3 8l5 5 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></button></div>
+  <div><label>&nbsp;</label><button type="button" class="sa-mini" id="pull-both" title="Traer inicio y fin de falla del ticket">↙ Traer fechas del ticket</button></div>
   <div class="full"><label>Exclusiones</label><%= f.text_area :exclusions, value: @evaluation.exclusions, rows: 2 %></div>
+  <div class="full"><label>Observaciones</label><%= f.text_area :observations, value: @evaluation.observations, rows: 4 %></div>
 </div>
+<p class="sa-hint">* El escalamiento es obligatorio para avanzar. Las fechas no aceptan futuro ni anteriores al inicio de la falla.</p>
 </section>
 
 <section class="sa-panel" id="panel-d">
-<h3>D. Conciliación</h3>
+<h3>C. Conciliación</h3>
 <% if @evaluation.conciliation_applies != true %>
-<div class="sa-calc">La conciliación se habilita al marcar <strong>¿Aplica ANS? = Sí</strong> en la pestaña C.</div>
+<div class="sa-calc">La conciliación se habilita al marcar <strong>¿Aplica ANS? = Sí</strong> en la pestaña B.</div>
 <% end %>
 <div class="sa-calc">Diferencia (computable − reconocido): <strong id="calc-diff">—</strong> · Se calcula sola al guardar.</div>
 <div class="sa-grid">
@@ -171,11 +167,10 @@ function saMin(a,b){if(!a||!b)return null;var ms=new Date(b)-new Date(a);if(isNa
 function saHuman(m){if(m==null)return '—';var h=Math.floor(m/60);return h>0?h+'h '+(m%60)+'m ('+m+' min)':m+' min';}
 function saToLocal(v){if(!v)return '';var d=new Date(v.replace(' ','T'));if(isNaN(d))return '';var p=function(n){return (n<10?'0':'')+n;};return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes());}
 function saCalc(){
-  var rs=document.getElementById('ev-real-start'),re=document.getElementById('ev-real-end');
   var cs=document.getElementById('ev-contract-start'),ce=document.getElementById('ev-contract-end');
-  document.getElementById('calc-real').textContent=saHuman(saMin(rs&&rs.value,re&&re.value));
   var cm=saMin(cs&&cs.value,ce&&ce.value);
-  document.getElementById('calc-contract').textContent=saHuman(cm);
+  document.getElementById('calc-contract').textContent=(cm==null)?'—':cm+' min';
+  document.getElementById('calc-contract-h').textContent=saHuman(cm);
   var dtEl=document.getElementById('ev-downtime');
   if(cm!=null&&dtEl)dtEl.value=cm;
   var ak=parseInt((document.getElementById('ev-ack')||{}).value,10);
@@ -218,12 +213,22 @@ if(pullBoth){pullBoth.addEventListener('click',function(){
 });}
 function saApplyTabs(ts){
   if(!ts)return;
-  var map={'a':'panel-a','b':'panel-b','c':'panel-c','d':'panel-d','f':'panel-f'};
+  var map={'a':'panel-a','b':'panel-b','d':'panel-d','f':'panel-f'};
   Object.keys(map).forEach(function(k){
     var btn=document.querySelector('.sa-tabbar button[data-tab="'+map[k]+'"]');
     if(!btn)return;
     btn.classList.remove('ok','todo');
     btn.classList.add(ts[k]?'ok':'todo');
+  });
+}
+function saNowLocal(){var d=new Date();var p=function(n){return (n<10?'0':'')+n;};return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes());}
+function saLimits(){
+  var f=document.getElementById('sa-form');
+  var t0=saToLocal(f.getAttribute('data-ticket-start'))||'';
+  var now=saNowLocal();
+  ['ev-contract-start','ev-contract-end'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(el){if(t0)el.min=t0;el.max=now;}
   });
 }
 document.querySelectorAll('.sa-flow button[data-t]').forEach(function(b){
@@ -263,6 +268,7 @@ document.getElementById('dlg-rej-ok').addEventListener('click',function(){
   document.getElementById('sa-form').submit();
 });
 saCalc();
+saLimits();
 document.querySelectorAll('.sa-tabbar button').forEach(function(btn){
   btn.addEventListener('click',function(){
     document.querySelectorAll('.sa-tabbar button').forEach(function(b){b.classList.remove('active');});
