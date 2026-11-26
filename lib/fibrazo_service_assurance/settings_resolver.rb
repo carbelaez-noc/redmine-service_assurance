@@ -64,20 +64,28 @@ module FibrazoServiceAssurance
       IssueCustomField.where(field_format: 'list').order(:name).pluck(:name, :id)
     end
 
-    # Lista configurable de carriers (uno por línea en el ajuste).
+    # Lista de carriers: inventario OLT en vivo; respaldo = ajuste manual.
+    # Sin IDs en código y sin dependencia del otro plugin (SQL con rescate).
     def carrier_options
-      settings['carrier_list'].to_s.lines.map(&:strip).reject(&:empty?).uniq.first(200)
+      live = begin
+        ActiveRecord::Base.connection.select_values(
+          "SELECT DISTINCT name FROM olt_carrier_inventory_providers WHERE active AND provider_type = 'carrier' AND name IS NOT NULL AND name <> '' ORDER BY 1"
+        ).map { |v| v.to_s.strip }.reject(&:empty?).uniq
+      rescue StandardError
+        []
+      end
+      list = live.any? ? live : settings['carrier_list'].to_s.lines.map(&:strip).reject(&:empty?).uniq
+      list.first(200)
     end
 
     # Completitud por pestaña para pintar el estado (rojo pastel = incompleta).
-    def tab_states(sa_case, evaluation)
+    def tab_states(_sa_case, evaluation)
       ev = evaluation || ServiceAssuranceEvaluation.new
       b = ev.provider.present? && ev.real_start_at.present? && ev.real_end_at.present? && !ev.affected_customers.nil?
       c = !ev.ans_applies.nil? && ev.reported_on.present? && ev.contract_start_at.present? &&
-          ev.contract_end_at.present? && !ev.downtime_minutes.nil? && !ev.conciliation_applies.nil?
+          ev.contract_end_at.present?
       d = d_complete?(ev)
-      e = ev.circuit.present? || sa_case.circuits.any? || sa_case.intervals.any?
-      { a: true, b: b, c: c, d: d, e: e, f: true }
+      { a: true, b: b, c: c, d: d, f: true }
     end
 
     def d_complete?(ev)

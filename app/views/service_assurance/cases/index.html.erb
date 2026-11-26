@@ -1,7 +1,7 @@
-<h2>Service Assurance — Bandeja del comité</h2>
+<h2>Service Assurance</h2>
 <%= form_tag('/service_assurance', method: :get) do %>
   <label>Estado</label>
-  <%= select_tag 'sa_status', options_for_select([['— todos —', '']] + ServiceAssuranceCase::STATUSES.map { |s| [s, s] }, @status_filter) %>
+  <%= select_tag 'sa_status', options_for_select([['Abiertos (pendientes + en curso)', '']] + ServiceAssuranceCase::STATUSES.map { |s| [s, s] }, @status_filter) %>
   <label>Carrier</label>
   <%= text_field_tag 'sa_carrier', @carrier_filter, size: 15 %>
   <label>Evaluador (id)</label>
@@ -16,21 +16,21 @@
 <% if @issues.nil? %>
   <p class="nodata">Configure el campo de activación en Administración → ajustes del plugin.</p>
 <% elsif @issues.empty? %>
-  <p class="nodata">Sin casos cerrados con valor afirmativo.</p>
+  <p class="nodata">Sin casos para este filtro.</p>
 <% else %>
-  <p><em><%= @total %> caso(s) elegible(s). Se muestran hasta 100 por página, ordenados por cierre reciente.</em></p>
+  <span class="pagination"><%= pagination_links_full(@paginator, @issue_count) %></span>
   <table class="list issues">
     <thead><tr><th>#</th><th>Asunto</th><th>Proyecto</th><th>Cerrado</th><th>Antig.</th><th>Estado SA</th><th>Carrier</th><th>Evaluador</th><th></th></tr></thead>
     <tbody>
     <% @issues.each do |issue| %>
       <% sa = @case_by_issue[issue.id] %>
       <tr>
-        <td><%= link_to "##{issue.id}", issue_path(issue) %></td>
+        <td><%= link_to issue_folio(issue), issue_path(issue) %></td>
         <td><%= issue.subject %></td>
         <td><%= issue.project.name %></td>
         <td><%= format_time(issue.closed_on) %></td>
         <td><%= sa && sa.age_days ? "#{sa.age_days}d" : '—' %></td>
-        <td><%= sa ? sa.status : '—' %></td>
+        <td><%= sa ? sa.status : 'pendiente por evaluar' %></td>
         <td><%= sa&.evaluation&.provider || '—' %></td>
         <td><%= sa&.assignee ? sa.assignee.login : '—' %></td>
         <td>
@@ -47,4 +47,5 @@
     <% end %>
     </tbody>
   </table>
+  <span class="pagination"><%= pagination_links_full(@paginator, @issue_count) %></span>
 <% end %>

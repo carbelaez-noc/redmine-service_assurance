@@ -56,3 +56,16 @@ límite 100. Sin Krill, sin colectores. API de lectura deshabilitada por defecto
 - Pestañas con estado (rojo pastel = incompleta), grilla 2 columnas responsive,
   carrier en lista configurable, cálculos JS en vivo, journals colapsables,
   aviso condicional en D, export XLSX del periodo (CarrierXlsx con rubyzip, sin gemas).
+
+## v0.4.0 (flujo por botones + inventario)
+
+- Carrier desde `olt_carrier_inventory_providers` en vivo (respaldo: ajuste manual).
+- Sin pestaña E/F en UI (tablas se conservan con datos); sin campo circuito simple,
+  sin resultado/credito-solicitado/estado manual, sin doble campo de conciliación
+  (ANS Sí => concilia automático).
+- Flujo por botones: guardar / a revisión / a conciliación / cerrar reconocida /
+  rechazada / no aplica, con permisos por transición.
+- Autollenado servidor: downtime = rango a objetar; diferencia = computable − reconocido.
+- Autoguardado AJAX por pestaña (JSON + indicador), sin recargar.
+- Folio corporativo (IMS…) + volver a bandeja; paginación nativa Redmine con
+  filtro por defecto de abiertos.

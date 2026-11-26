@@ -7,7 +7,7 @@ Redmine::Plugin.register :fibrazo_service_assurance do
   name 'Service Assurance'
   author 'Fibrazo NOC'
   description 'Bandeja ligera de evaluación y conciliación de ANS de proveedores externos. Tablas propias, sin tocar issues.'
-  version '0.3.1'
+  version '0.4.0'
   url 'https://github.com/carbelaez-noc/redmine-service_assurance'
   requires_redmine version_or_higher: '5.0.0'
 

@@ -9,6 +9,7 @@ module ServiceAssurance
     before_action :authorize_open, only: %i[open]
 
     helper :issues
+    helper ServiceAssurance::CasesHelper
 
     def index
       scope = FibrazoServiceAssurance::SettingsResolver.eligible_scope
@@ -32,26 +33,25 @@ module ServiceAssurance
       end
       scope = scope.where('issues.closed_on >= ?', Date.parse(@from).beginning_of_day) if @from.match?(/\A\d{4}-\d{2}-\d{2}\z/)
       scope = scope.where('issues.closed_on <= ?', Date.parse(@to).end_of_day) if @to.match?(/\A\d{4}-\d{2}-\d{2}\z/)
+      # Casos SA y evaluación para filtros de estado/carrier/evaluador.
+      scope = scope.joins('LEFT JOIN service_assurance_cases sac ON sac.issue_id = issues.id')
+                   .joins('LEFT JOIN service_assurance_evaluations sae ON sae.case_id = sac.id')
+      if @status_filter
+        scope = scope.where('sac.status = ?', @status_filter)
+      else
+        # Por defecto: pendientes por evaluar + evaluados sin cierre.
+        scope = scope.where("sac.status IS NULL OR sac.status IN ('pendiente','en_revision','por_conciliar')")
+      end
+      scope = scope.where('sae.provider ILIKE ?', "%#{@carrier_filter}%") if @carrier_filter.present?
+      scope = scope.where('sac.assignee_id = ?', @eval_filter.to_i) if @eval_filter.match?(/\A\d+\z/)
 
       scope = scope.includes(:project, :status)
-      @total = scope.count
-      @issues = scope.order('issues.closed_on DESC').limit(100).offset(params[:offset].to_i)
+      @issue_count = scope.count
+      @limit = per_page_option
+      @paginator = Paginator.new(@issue_count, @limit, params['page'])
+      @issues = scope.order('issues.closed_on DESC').limit(@limit).offset(@paginator.offset).to_a
       cases = ServiceAssuranceCase.where(issue_id: @issues.map(&:id)).includes(:evaluation, :assignee).to_a
       @case_by_issue = cases.index_by(&:issue_id)
-      if @status_filter || @carrier_filter.present? || @eval_filter.present?
-        @issues = @issues.to_a.select do |issue|
-          sa = @case_by_issue[issue.id]
-          next false if @status_filter && sa&.status != @status_filter
-          if @carrier_filter.present?
-            prov = sa&.evaluation&.provider.to_s.downcase
-            next false unless prov.include?(@carrier_filter.downcase)
-          end
-          if @eval_filter.present?
-            next false unless sa&.assignee_id.to_s == @eval_filter
-          end
-          true
-        end
-      end
     end
 
     def show
@@ -84,6 +84,18 @@ module ServiceAssurance
       redirect_to service_assurance_case_path(@sa_case)
     end
 
+    # Flujo por botones (sin selector manual de estado):
+    # save (guardar avance) / to_review (en revisión) / to_conciliate (por conciliar, permiso
+    # conciliación) / close_accepted|close_rejected (conciliado + motivo, permiso conciliación)
+    # / discard (no aplica). Cálculos autoritativos en servidor (JS solo previsualiza).
+    TRANSITIONS = {
+      'to_review' => 'en_revision',
+      'to_conciliate' => 'por_conciliar',
+      'close_accepted' => 'conciliado',
+      'close_rejected' => 'conciliado',
+      'discard' => 'no_aplica'
+    }.freeze
+
     def update
       @evaluation = @sa_case.evaluation || @sa_case.build_evaluation
       attrs = evaluation_params
@@ -92,53 +104,67 @@ module ServiceAssurance
         old = @evaluation.send(k)
         changed << [k, old, v] if old.to_s != v.to_s
       end
-      status = params[:sa_status].to_s
-      if status.present?
-        unless ServiceAssuranceCase::STATUSES.include?(status)
-          flash.now[:error] = 'Estado inválido'
-          render_show and return
+      @evaluation.assign_attributes(attrs)
+      transition = params[:transition].to_s
+      if transition.present? && transition != 'save'
+        unless TRANSITIONS.key?(transition)
+          return update_fail('Transición inválida')
         end
-        if @sa_case.final? && @sa_case.status != status && !allowed?(:reopen_service_assurance)
-          flash.now[:error] = 'Evaluación finalizada: requiere permiso de reapertura'
-          render_show and return
+        if %w[to_conciliate close_accepted close_rejected].include?(transition) && !allowed?(:manage_conciliations)
+          return update_fail('Requiere permiso de conciliación')
         end
-        changed << %w[status] + [@sa_case.status, status] if @sa_case.status != status
-        @sa_case.status = status
+        if @sa_case.final? && !allowed?(:reopen_service_assurance)
+          return update_fail('Evaluación finalizada: requiere permiso de reapertura')
+        end
+        new_status = TRANSITIONS[transition]
+        changed << ['status', @sa_case.status, new_status] if @sa_case.status != new_status
+        @sa_case.status = new_status
+        if transition == 'close_accepted' && @evaluation.result.to_s.strip.empty?
+          @evaluation.result = 'reconocida'
+          changed << ['result', '', 'reconocida']
+        elsif transition == 'close_rejected' && @evaluation.result.to_s.strip.empty?
+          @evaluation.result = 'rechazada'
+          changed << ['result', '', 'rechazada']
+        end
+      elsif @sa_case.final? && !allowed?(:reopen_service_assurance)
+        return update_fail('Evaluación finalizada: requiere permiso de reapertura')
       end
       if @sa_case.assignee_id.nil?
         @sa_case.assignee_id = User.current.id
         changed << ['assignee', nil, User.current.login]
       end
-      parse_errors = []
-      new_circuits = parse_rows(params[:circuits], %w[circuit external_case external_verified], parse_errors)
-      new_intervals = parse_rows(params[:intervals], %w[kind start_at end_at note circuit_ref], parse_errors)
-      if parse_errors.any?
-        flash.now[:error] = parse_errors.first(3).join('; ')
-        render_show and return
-      end
       if @evaluation.real_start_at && @evaluation.real_end_at && @evaluation.real_end_at <= @evaluation.real_start_at
-        flash.now[:error] = 'Fin real debe ser posterior al inicio real'
-        render_show and return
+        return update_fail('Fin real debe ser posterior al inicio real')
       end
       if @evaluation.contract_start_at && @evaluation.contract_end_at && @evaluation.contract_end_at <= @evaluation.contract_start_at
-        flash.now[:error] = 'Fin contractual debe ser posterior al inicio contractual'
-        render_show and return
+        return update_fail('Fin a objetar debe ser posterior al inicio a objetar')
       end
+      # Autoritativos en servidor (el JS solo previsualiza).
+      @evaluation.recompute_derived!.each { |f, (o, n)| changed << [f, o, n] }
       ActiveRecord::Base.transaction do
         @evaluation.save!
         @sa_case.save!
-        @sa_case.circuits.destroy_all
-        @sa_case.intervals.destroy_all
-        new_circuits.each { |c| @sa_case.circuits.create!(c) }
-        new_intervals.each { |r| @sa_case.intervals.create!(r.except('circuit_ref')) }
         changed.each { |f, o, n| ServiceAssuranceAudit.log(@sa_case.id, User.current.id, 'update', f, [o, n]) }
-        ServiceAssuranceAudit.log(@sa_case.id, User.current.id, 'update', 'circuits/intervals', nil) if new_circuits.any? || new_intervals.any?
+      end
+      if request.xhr?
+        render json: { ok: true, status: @sa_case.status, saved_at: Time.zone.now.strftime('%H:%M:%S'),
+                       downtime: @evaluation.downtime_minutes, difference: @evaluation.difference_minutes,
+                       tab_states: FibrazoServiceAssurance::SettingsResolver.tab_states(@sa_case, @evaluation) }
+        return
       end
       flash[:notice] = 'Avance guardado'
       redirect_to service_assurance_case_path(@sa_case)
     rescue ActiveRecord::StaleObjectError
-      flash[:error] = 'Otro evaluador guardó cambios mientras editaba. Recargue y reintente.'
-      redirect_to service_assurance_case_path(@sa_case)
+      update_fail('Otro evaluador guardó cambios mientras editaba. Recargue y reintente.')
+    end
+
+    def update_fail(message)
+      if request.xhr?
+        render json: { ok: false, error: message }, status: :unprocessable_entity
+        return
+      end
+      flash.now[:error] = message
+      render_show
     end
 
     def conciliate
@@ -284,14 +310,15 @@ module ServiceAssurance
     end
 
     def evaluation_params
+      # downtime/difference/conciliation/result: calculados o derivados en servidor, no editables.
       params.require(:evaluation).permit(
         :lock_version,
-        :provider, :circuit, :external_case, :external_verified, :impact_type,
+        :provider, :external_case, :external_verified, :impact_type,
         :real_start_at, :real_end_at, :affected_customers, :observations,
         :ans_applies, :reported_on, :contract_start_at, :contract_end_at,
-        :exclusions, :downtime_minutes, :conciliation_applies,
-        :sent_on, :acknowledged_minutes, :difference_minutes, :conciliation_notes,
-        :result, :credit_requested, :credit_granted
+        :exclusions,
+        :sent_on, :acknowledged_minutes, :conciliation_notes,
+        :credit_granted
       )
     end
   end
