@@ -16,26 +16,53 @@ module ServiceAssurance
       yes = FibrazoServiceAssurance::SettingsResolver.yes_values
       @status_filter = params[:sa_status].to_s
       @status_filter = nil unless ServiceAssuranceCase::STATUSES.include?(@status_filter)
+      @carrier_filter = params[:sa_carrier].to_s.strip
+      @eval_filter = params[:sa_eval].to_s.strip
+      @from = params[:sa_from].to_s.strip
+      @to = params[:sa_to].to_s.strip
 
       if field
         norm = yes.map { |v| ActiveRecord::Base.connection.quote(v) }.join(',')
-        # Normaliza tildes/comillas en SQL para SÍ/SI/YES sin full-scan adicional:
-        # el join ya filtra por custom_field_id (índice) y estado cerrado.
+        # Normaliza tildes/comillas/mayúsculas en SQL (SÍ=SI) sin full-scan:
+        # el join filtra por custom_field_id (índice) + estado cerrado.
         scope = scope.joins("INNER JOIN custom_values cv_sa ON cv_sa.customized_id = issues.id AND cv_sa.customized_type = 'Issue' AND cv_sa.custom_field_id = #{field.id.to_i}")
-                     .where("UPPER(TRIM(BOTH '\"' FROM cv_sa.value)) IN (#{norm})")
+                     .where("TRANSLATE(UPPER(TRIM(BOTH '\"' FROM cv_sa.value)), 'ÁÉÍÓÚÜ', 'AEIOU') IN (#{norm})")
       else
         scope = scope.none
       end
+      scope = scope.where('issues.closed_on >= ?', Date.parse(@from).beginning_of_day) if @from.match?(/\A\d{4}-\d{2}-\d{2}\z/)
+      scope = scope.where('issues.closed_on <= ?', Date.parse(@to).end_of_day) if @to.match?(/\A\d{4}-\d{2}-\d{2}\z/)
 
+      scope = scope.includes(:project, :status)
       @total = scope.count
       @issues = scope.order('issues.closed_on DESC').limit(100).offset(params[:offset].to_i)
-      @case_by_issue = ServiceAssuranceCase.where(issue_id: @issues.map(&:id)).index_by(&:issue_id)
+      cases = ServiceAssuranceCase.where(issue_id: @issues.map(&:id)).includes(:evaluation, :assignee).to_a
+      @case_by_issue = cases.index_by(&:issue_id)
+      if @status_filter || @carrier_filter.present? || @eval_filter.present?
+        @issues = @issues.to_a.select do |issue|
+          sa = @case_by_issue[issue.id]
+          next false if @status_filter && sa&.status != @status_filter
+          if @carrier_filter.present?
+            prov = sa&.evaluation&.provider.to_s.downcase
+            next false unless prov.include?(@carrier_filter.downcase)
+          end
+          if @eval_filter.present?
+            next false unless sa&.assignee_id.to_s == @eval_filter
+          end
+          true
+        end
+      end
     end
 
     def show
       @evaluation = @sa_case.evaluation || @sa_case.build_evaluation
       @issue = @sa_case.issue
+      @circuits = @sa_case.circuits.order(:id).to_a
+      @intervals = @sa_case.intervals.order(:start_at).to_a
       @audits = @sa_case.audits.order(id: :desc).limit(50)
+      @journals = @issue.journals.includes(:user).order(:id).to_a.select { |j| j.notes.present? }
+      @attachments = @issue.attachments.to_a
+      @suggested = ServiceAssuranceInterval.suggested_downtime(@sa_case.id)
       @readonly_issue = true
     end
 
@@ -66,21 +93,48 @@ module ServiceAssurance
       if status.present?
         unless ServiceAssuranceCase::STATUSES.include?(status)
           flash.now[:error] = 'Estado inválido'
-          render :show and return
+          render_show and return
         end
-        if @sa_case.final? && !allowed?(:reopen_service_assurance)
+        if @sa_case.final? && @sa_case.status != status && !allowed?(:reopen_service_assurance)
           flash.now[:error] = 'Evaluación finalizada: requiere permiso de reapertura'
-          render :show and return
+          render_show and return
         end
         changed << %w[status] + [@sa_case.status, status] if @sa_case.status != status
         @sa_case.status = status
       end
+      if @sa_case.assignee_id.nil?
+        @sa_case.assignee_id = User.current.id
+        changed << ['assignee', nil, User.current.login]
+      end
+      parse_errors = []
+      new_circuits = parse_rows(params[:circuits], %w[circuit external_case external_verified], parse_errors)
+      new_intervals = parse_rows(params[:intervals], %w[kind start_at end_at note circuit_ref], parse_errors)
+      if parse_errors.any?
+        flash.now[:error] = parse_errors.first(3).join('; ')
+        render_show and return
+      end
+      if @evaluation.real_start_at && @evaluation.real_end_at && @evaluation.real_end_at <= @evaluation.real_start_at
+        flash.now[:error] = 'Fin real debe ser posterior al inicio real'
+        render_show and return
+      end
+      if @evaluation.contract_start_at && @evaluation.contract_end_at && @evaluation.contract_end_at <= @evaluation.contract_start_at
+        flash.now[:error] = 'Fin contractual debe ser posterior al inicio contractual'
+        render_show and return
+      end
       ActiveRecord::Base.transaction do
         @evaluation.save!
         @sa_case.save!
+        @sa_case.circuits.destroy_all
+        @sa_case.intervals.destroy_all
+        new_circuits.each { |c| @sa_case.circuits.create!(c) }
+        new_intervals.each { |r| @sa_case.intervals.create!(r.except('circuit_ref')) }
         changed.each { |f, o, n| ServiceAssuranceAudit.log(@sa_case.id, User.current.id, 'update', f, [o, n]) }
+        ServiceAssuranceAudit.log(@sa_case.id, User.current.id, 'update', 'circuits/intervals', nil) if new_circuits.any? || new_intervals.any?
       end
       flash[:notice] = 'Avance guardado'
+      redirect_to service_assurance_case_path(@sa_case)
+    rescue ActiveRecord::StaleObjectError
+      flash[:error] = 'Otro evaluador guardó cambios mientras editaba. Recargue y reintente.'
       redirect_to service_assurance_case_path(@sa_case)
     end
 
@@ -101,6 +155,58 @@ module ServiceAssurance
     end
 
     private
+
+    def render_show
+      @issue = @sa_case.issue
+      @circuits = @sa_case.circuits.order(:id).to_a
+      @intervals = @sa_case.intervals.order(:start_at).to_a
+      @audits = @sa_case.audits.order(id: :desc).limit(50)
+      @journals = @issue.journals.includes(:user).order(:id).to_a.select { |j| j.notes.present? }
+      @attachments = @issue.attachments.to_a
+      @suggested = ServiceAssuranceInterval.suggested_downtime(@sa_case.id)
+      render :show
+    end
+
+    # Filas repetidas `name[][campo]`: llegan como ActionController::Parameters.
+    # Filas totalmente vacías se ignoran; el resto se valida servidor.
+    def parse_rows(raw, allowed, errors)
+      return [] if raw.nil?
+      hash = raw.respond_to?(:to_unsafe_h) ? raw.to_unsafe_h : raw
+      rows = hash.is_a?(Hash) ? hash.values : Array(hash)
+      out = []
+      rows.each_with_index do |row, idx|
+        next unless row.is_a?(Hash)
+        row = row.slice(*allowed)
+        next if row.values.all? { |v| v.to_s.strip.empty? }
+        if allowed.include?('circuit') && row['circuit'].to_s.strip.empty?
+          errors << "Fila #{idx + 1}: circuito requerido"
+          next
+        end
+        if allowed.include?('kind')
+          unless ServiceAssuranceInterval::KINDS.include?(row['kind'].to_s)
+            errors << "Fila #{idx + 1}: tipo de intervalo inválido"
+            next
+          end
+          %w[start_at end_at].each do |k|
+            begin
+              row[k] = Time.zone.parse(row[k].to_s) if row[k].present?
+            rescue StandardError
+              row[k] = nil
+            end
+          end
+          if row['start_at'].blank? || row['end_at'].blank?
+            errors << "Fila #{idx + 1}: inicio y fin requeridos"
+            next
+          end
+          if row['end_at'] <= row['start_at']
+            errors << "Fila #{idx + 1}: fin debe ser posterior al inicio"
+            next
+          end
+        end
+        out << row
+      end
+      out
+    end
 
     def find_case
       # POST evaluate puede llegar con issue_id (crea idempotente) o id de caso.
@@ -143,6 +249,7 @@ module ServiceAssurance
 
     def evaluation_params
       params.require(:evaluation).permit(
+        :lock_version,
         :provider, :circuit, :external_case, :external_verified, :impact_type,
         :real_start_at, :real_end_at, :affected_customers, :observations,
         :ans_applies, :reported_on, :contract_start_at, :contract_end_at,

@@ -1,17 +1,43 @@
 <h2>Service Assurance — Caso #<%= @sa_case.id %> (ticket <%= link_to "##{@issue.id}", issue_path(@issue) %>)</h2>
-<p><strong>Estado SA:</strong> <%= @sa_case.status %> · <strong>Ticket:</strong> <%= @issue.subject %> (<%= @issue.status.name %> · <%= @issue.project.name %>)</p>
+<p><strong>Estado SA:</strong> <%= @sa_case.status %> · <strong>Evaluador:</strong> <%= @sa_case.assignee ? @sa_case.assignee.login : '—' %> · <strong>Antigüedad:</strong> <%= @sa_case.age_days ? "#{@sa_case.age_days} días" : '—' %> · <strong>Ticket:</strong> <%= @issue.subject %> (<%= @issue.status.name %> · <%= @issue.project.name %>)</p>
 
 <h3>A. Información original del ticket (solo lectura)</h3>
 <div class="box">
   <p><strong>Asunto:</strong> <%= @issue.subject %></p>
   <p><strong>Proyecto/Tracker:</strong> <%= @issue.project.name %> / <%= @issue.tracker.name %></p>
   <p><strong>Cierre:</strong> <%= format_time(@issue.closed_on) %></p>
+  <% snap = @sa_case.original_snapshot || {} %>
+  <% if snap.any? %>
+  <table class="list">
+    <thead><tr><th>Dato original</th><th>Valor al abrir la evaluación</th></tr></thead>
+    <tbody>
+    <% { 'ciudad' => 'Ciudad', 'inicio' => 'Inicio de falla', 'fin' => 'Fin de falla', 'clientes' => 'Clientes afectados', 'carrier' => 'Carrier', 'caso_isp' => '# Caso ISP', 'categoria' => 'Categoría', 'subcategoria' => 'Subcategoría', 'motivo' => 'Motivo', 'id_externo' => 'ID externo' }.each do |key, label| %>
+      <% raw = snap.dig(key, 'raw') %>
+      <tr><td><%= label %></td><td><%= FibrazoServiceAssurance::PreloadMap.display(raw) %></td></tr>
+    <% end %>
+    </tbody>
+  </table>
+  <% end %>
   <p><strong>Descripción:</strong></p>
   <div class="wiki"><%= textilizable(@issue.description) %></div>
+  <% if @journals.any? %>
+  <p><strong>Notas del ticket (solo lectura):</strong></p>
+  <% @journals.each do |j| %>
+    <div class="journal"><p><em><%= j.user ? j.user.login : '?' %> — <%= format_time(j.created_on) %></em></p><div class="wiki"><%= textilizable(j.notes) %></div></div>
+  <% end %>
+  <% end %>
+  <% if @attachments.any? %>
+  <p><strong>Adjuntos (<%= @attachments.size %>):</strong>
+  <% @attachments.each do |a| %>
+    <%= link_to a.filename, attachment_path(a) %>
+  <% end %>
+  </p>
+  <% end %>
 </div>
 
 <%= form_for :evaluation, url: "/service_assurance/cases/#{@sa_case.id}", html: { method: :patch } do |f| %>
-<h3>B. Evaluación técnica</h3>
+<%= f.hidden_field :lock_version, value: @evaluation.lock_version %>
+<h3>B. Evaluación técnica (precargada, confirmable)</h3>
 <div class="box tabular">
   <p><label>Proveedor</label><%= f.text_field :provider, value: @evaluation.provider, size: 40 %></p>
   <p><label>Circuito o servicio</label><%= f.text_field :circuit, value: @evaluation.circuit, size: 40 %></p>
@@ -31,7 +57,7 @@
   <p><label>Inicio contractual validado</label><%= f.datetime_field :contract_start_at, value: @evaluation.contract_start_at %></p>
   <p><label>Fin contractual validado</label><%= f.datetime_field :contract_end_at, value: @evaluation.contract_end_at %></p>
   <p><label>Exclusiones</label><%= f.text_area :exclusions, value: @evaluation.exclusions, rows: 3, cols: 80 %></p>
-  <p><label>Indisponibilidad computable (min)</label><%= f.number_field :downtime_minutes, value: @evaluation.downtime_minutes %></p>
+  <p><label>Indisponibilidad computable (min)</label><%= f.number_field :downtime_minutes, value: @evaluation.downtime_minutes %> <em>Sugerido por intervalos: <%= @suggested %> min (técnica − exclusiones; degradación no suma).</em></p>
   <p><label>Aplicabilidad de conciliación</label><%= f.select :conciliation_applies, [['—', ''], ['Sí', true], ['No', false]], selected: @evaluation.conciliation_applies.nil? ? '' : @evaluation.conciliation_applies %></p>
 </div>
 
@@ -47,6 +73,51 @@
   <p><label>Estado SA</label>
     <%= select_tag 'sa_status', options_for_select(ServiceAssuranceCase::STATUSES, @sa_case.status) %>
   </p>
+</div>
+
+<h3>E. Circuitos (uno o varios)</h3>
+<div class="box">
+<table class="list" id="sa-circuits">
+  <thead><tr><th>Circuito</th><th>Caso externo</th><th>Verificación</th></tr></thead>
+  <tbody>
+  <% (@circuits.presence || [ServiceAssuranceCircuit.new]).each_with_index do |c, i| %>
+    <tr>
+      <td><input name="circuits[][circuit]" value="<%= c.circuit %>" size="30"/></td>
+      <td><input name="circuits[][external_case]" value="<%= c.external_case %>" size="20"/></td>
+      <td><select name="circuits[][external_verified]"><% %w[pendiente verificado discrepancia].each do |v| %><option value="<%= v %>"<%= ' selected' if c.external_verified == v %>><%= v %></option><% end %></select></td>
+    </tr>
+  <% end %>
+    <tr>
+      <td><input name="circuits[][circuit]" value="" size="30" placeholder="otro circuito…"/></td>
+      <td><input name="circuits[][external_case]" value="" size="20"/></td>
+      <td><select name="circuits[][external_verified]"><% %w[pendiente verificado discrepancia].each do |v| %><option value="<%= v %>"><%= v %></option><% end %></select></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h3>F. Intervalos (técnicos, degradación, exclusiones, contractuales, reconocidos)</h3>
+<div class="box">
+<table class="list" id="sa-intervals">
+  <thead><tr><th>Tipo</th><th>Inicio</th><th>Fin</th><th>Nota</th></tr></thead>
+  <tbody>
+  <% (@intervals.presence || []).each do |r| %>
+    <tr>
+      <td><select name="intervals[][kind]"><% ServiceAssuranceInterval::KINDS.each do |v| %><option value="<%= v %>"<%= ' selected' if r.kind == v %>><%= v %></option><% end %></select></td>
+      <td><input type="datetime-local" name="intervals[][start_at]" value="<%= r.start_at ? r.start_at.strftime('%Y-%m-%dT%H:%M') : '' %>"/></td>
+      <td><input type="datetime-local" name="intervals[][end_at]" value="<%= r.end_at ? r.end_at.strftime('%Y-%m-%dT%H:%M') : '' %>"/></td>
+      <td><input name="intervals[][note]" value="<%= r.note %>" size="30"/></td>
+    </tr>
+  <% end %>
+    <tr>
+      <td><select name="intervals[][kind]"><% ServiceAssuranceInterval::KINDS.each do |v| %><option value="<%= v %>"><%= v %></option><% end %></select></td>
+      <td><input type="datetime-local" name="intervals[][start_at]" value=""/></td>
+      <td><input type="datetime-local" name="intervals[][end_at]" value=""/></td>
+      <td><input name="intervals[][note]" value="" size="30" placeholder="nota…"/></td>
+    </tr>
+  </tbody>
+</table>
+<p><em>La degradación nunca suma a indisponibilidad. Sugerido actual: <%= @suggested %> min.</em></p>
 </div>
 <%= submit_tag 'Guardar avance' %>
 <% end %>

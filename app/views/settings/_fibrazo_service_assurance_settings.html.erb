@@ -34,3 +34,12 @@
   <%= check_box_tag 'settings[api_read_enabled]', '1', @settings['api_read_enabled'] == '1' %>
   <em>Deshabilitada por defecto.</em>
 </p>
+<fieldset><legend>Campos de precarga (vacío = autodetección por nombre; sin IDs en código)</legend>
+<% [['cf_ciudad','Ciudad'],['cf_inicio','Inicio de falla'],['cf_fin','Fin de falla'],['cf_clientes','Clientes afectados'],['cf_carrier','Carrier'],['cf_caso_isp','# Caso ISP'],['cf_categoria','Categoría cierre'],['cf_subcategoria','Subcategoría cierre'],['cf_motivo','Motivo cierre'],['cf_id_externo','ID externo']].each do |key,label| %>
+<p>
+  <label><%= label %></label>
+  <%= text_field_tag "settings[#{key}]", @settings[key], size: 6 %>
+  <em>Autodetectado: <%= (f = (s && FibrazoServiceAssurance::PreloadMap.field_for(key.sub('cf_','')))) ? "#{f.name} (##{f.id})" : '—' %></em>
+</p>
+<% end %>
+</fieldset>

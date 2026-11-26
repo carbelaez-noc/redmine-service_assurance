@@ -38,3 +38,11 @@ Evaluador Service Assurance (crear en UI, no en esta misión).
 Sin barridos: índice por `custom_field_id` + estado cerrado + `closed_on DESC`,
 límite 100. Sin Krill, sin colectores. API de lectura deshabilitada por defecto
 (`api_read_enabled`), futura OneView.
+
+## v0.2.0 (P2)
+
+- Precarga: snapshot de originales (CF ciudad/inicio/fin/clientes/carrier/caso-ISP/categoría/subcategoría/motivo/ID externo) + prefill editable; mapa por ajuste o autodetección por nombre.
+- Multialcance: `service_assurance_circuits` (N circuitos) + `service_assurance_intervals` (kinds tecnica/degradacion/exclusion/contractual/reconocida); degradación nunca suma; sugerido = técnica − exclusiones.
+- Concurrencia: `lock_version` en casos y evaluaciones (StaleObjectError → aviso).
+- Bandeja: filtros periodo/estado/carrier/evaluador + columnas antigüedad/carrier/evaluador; responsable autoasignado al primer guardado.
+- Detalle: journals con notas y adjuntos del ticket en solo lectura.

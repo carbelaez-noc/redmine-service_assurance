@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'settings_resolver'
+require_relative 'preload_map'
 require_relative 'eligibility'
 
 module FibrazoServiceAssurance
