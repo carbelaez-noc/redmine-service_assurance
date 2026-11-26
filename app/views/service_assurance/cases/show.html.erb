@@ -1,0 +1,62 @@
+<h2>Service Assurance — Caso #<%= @sa_case.id %> (ticket <%= link_to "##{@issue.id}", issue_path(@issue) %>)</h2>
+<p><strong>Estado SA:</strong> <%= @sa_case.status %> · <strong>Ticket:</strong> <%= @issue.subject %> (<%= @issue.status.name %> · <%= @issue.project.name %>)</p>
+
+<h3>A. Información original del ticket (solo lectura)</h3>
+<div class="box">
+  <p><strong>Asunto:</strong> <%= @issue.subject %></p>
+  <p><strong>Proyecto/Tracker:</strong> <%= @issue.project.name %> / <%= @issue.tracker.name %></p>
+  <p><strong>Cierre:</strong> <%= format_time(@issue.closed_on) %></p>
+  <p><strong>Descripción:</strong></p>
+  <div class="wiki"><%= textilizable(@issue.description) %></div>
+</div>
+
+<%= form_for :evaluation, url: "/service_assurance/cases/#{@sa_case.id}", html: { method: :patch } do |f| %>
+<h3>B. Evaluación técnica</h3>
+<div class="box tabular">
+  <p><label>Proveedor</label><%= f.text_field :provider, value: @evaluation.provider, size: 40 %></p>
+  <p><label>Circuito o servicio</label><%= f.text_field :circuit, value: @evaluation.circuit, size: 40 %></p>
+  <p><label>Número de caso externo</label><%= f.text_field :external_case, value: @evaluation.external_case, size: 30 %></p>
+  <p><label>Verificación del caso externo</label><%= f.select :external_verified, %w[pendiente verificado discrepancia], selected: @evaluation.external_verified %></p>
+  <p><label>Tipo de afectación</label><%= f.text_field :impact_type, value: @evaluation.impact_type, size: 40 %></p>
+  <p><label>Inicio real</label><%= f.datetime_field :real_start_at, value: @evaluation.real_start_at %></p>
+  <p><label>Fin real</label><%= f.datetime_field :real_end_at, value: @evaluation.real_end_at %></p>
+  <p><label>Clientes afectados</label><%= f.number_field :affected_customers, value: @evaluation.affected_customers %></p>
+  <p><label>Observaciones extensas</label><%= f.text_area :observations, value: @evaluation.observations, rows: 5, cols: 80 %></p>
+</div>
+
+<h3>C. Decisión contractual</h3>
+<div class="box tabular">
+  <p><label>Aplicabilidad de ANS</label><%= f.select :ans_applies, [['—', ''], ['Sí', true], ['No', false]], selected: @evaluation.ans_applies.nil? ? '' : @evaluation.ans_applies %></p>
+  <p><label>Fecha de reporte al proveedor</label><%= f.date_field :reported_on, value: @evaluation.reported_on %></p>
+  <p><label>Inicio contractual validado</label><%= f.datetime_field :contract_start_at, value: @evaluation.contract_start_at %></p>
+  <p><label>Fin contractual validado</label><%= f.datetime_field :contract_end_at, value: @evaluation.contract_end_at %></p>
+  <p><label>Exclusiones</label><%= f.text_area :exclusions, value: @evaluation.exclusions, rows: 3, cols: 80 %></p>
+  <p><label>Indisponibilidad computable (min)</label><%= f.number_field :downtime_minutes, value: @evaluation.downtime_minutes %></p>
+  <p><label>Aplicabilidad de conciliación</label><%= f.select :conciliation_applies, [['—', ''], ['Sí', true], ['No', false]], selected: @evaluation.conciliation_applies.nil? ? '' : @evaluation.conciliation_applies %></p>
+</div>
+
+<h3>D. Conciliación</h3>
+<div class="box tabular">
+  <p><label>Fecha de envío al proveedor</label><%= f.date_field :sent_on, value: @evaluation.sent_on %></p>
+  <p><label>Tiempos reconocidos (min)</label><%= f.number_field :acknowledged_minutes, value: @evaluation.acknowledged_minutes %></p>
+  <p><label>Diferencias (min)</label><%= f.number_field :difference_minutes, value: @evaluation.difference_minutes %></p>
+  <p><label>Observaciones</label><%= f.text_area :conciliation_notes, value: @evaluation.conciliation_notes, rows: 3, cols: 80 %></p>
+  <p><label>Resultado definitivo</label><%= f.text_field :result, value: @evaluation.result, size: 40 %></p>
+  <p><label>Créditos solicitados</label><%= f.number_field :credit_requested, value: @evaluation.credit_requested, step: 0.01 %></p>
+  <p><label>Créditos reconocidos</label><%= f.number_field :credit_granted, value: @evaluation.credit_granted, step: 0.01 %></p>
+  <p><label>Estado SA</label>
+    <%= select_tag 'sa_status', options_for_select(ServiceAssuranceCase::STATUSES, @sa_case.status) %>
+  </p>
+</div>
+<%= submit_tag 'Guardar avance' %>
+<% end %>
+
+<h3>Auditoría</h3>
+<table class="list">
+  <thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Campo</th><th>Antes</th><th>Después</th></tr></thead>
+  <tbody>
+  <% @audits.each do |a| %>
+    <tr><td><%= format_time(a.created_at) %></td><td><%= a.user_id %></td><td><%= a.action %></td><td><%= a.field_name %></td><td><%= truncate(a.old_value.to_s, length: 60) %></td><td><%= truncate(a.new_value.to_s, length: 60) %></td></tr>
+  <% end %>
+  </tbody>
+</table>

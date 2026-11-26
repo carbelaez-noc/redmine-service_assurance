@@ -1,0 +1,7 @@
+es:
+  permission_view_service_assurance: "Consultar Service Assurance"
+  permission_evaluate_service_assurance: "Evaluar incidentes"
+  permission_manage_conciliations: "Gestionar conciliaciones"
+  permission_reopen_service_assurance: "Reabrir evaluaciones finalizadas"
+  permission_admin_service_assurance: "Administrar Service Assurance"
+  project_module_service_assurance: "Service Assurance"

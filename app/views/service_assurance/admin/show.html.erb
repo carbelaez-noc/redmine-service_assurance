@@ -1,0 +1,10 @@
+<h2>Service Assurance — Administración</h2>
+<div class="box">
+  <p><strong>Campo de activación:</strong> <%= @activation_field ? "#{@activation_field.name} (##{@activation_field.id}, #{@activation_field.field_format})" : 'NO RESUELTO — configúrelo en los ajustes del plugin' %></p>
+  <p><strong>Valor afirmativo normalizado:</strong> <%= @yes_values.join(' / ') %></p>
+  <p><strong>Estados elegibles:</strong> <%= @eligible_status_ids.join(', ') %></p>
+  <p><strong>Trackers:</strong> <%= @eligible_tracker_ids.any? ? @eligible_tracker_ids.join(', ') : 'todos' %></p>
+  <p><strong>Proyectos:</strong> <%= @eligible_project_ids.any? ? @eligible_project_ids.join(', ') : 'todos' %></p>
+  <p><strong>Casos registrados:</strong> <%= @case_count %> (<%= @by_status.map { |k, v| "#{k}: #{v}" }.join(' · ') %>)</p>
+</div>
+<p><%= link_to 'Ajustes del plugin', '/settings/plugin/fibrazo_service_assurance' %></p>

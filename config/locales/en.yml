@@ -1,0 +1,7 @@
+en:
+  permission_view_service_assurance: "View Service Assurance"
+  permission_evaluate_service_assurance: "Evaluate incidents"
+  permission_manage_conciliations: "Manage conciliations"
+  permission_reopen_service_assurance: "Reopen finalized evaluations"
+  permission_admin_service_assurance: "Administer Service Assurance"
+  project_module_service_assurance: "Service Assurance"

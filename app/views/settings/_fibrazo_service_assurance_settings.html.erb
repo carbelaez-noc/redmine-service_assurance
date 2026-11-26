@@ -1,0 +1,36 @@
+<% s = FibrazoServiceAssurance::SettingsResolver rescue nil %>
+<p>
+  <label>Campo de activación (tipo lista)</label>
+  <%= select_tag 'settings[activation_cf_id]',
+      options_for_select([['— autodetectar por nombre —', '']] + (s ? s.list_candidate_fields.map { |n, i| ["#{n} (##{i})", i] } : []),
+                         @settings['activation_cf_id'].to_s) %>
+  <em>Autodetecta “¿Requiere evaluación de ANS?” si se deja vacío. Sin IDs en el código.</em>
+</p>
+<p>
+  <label>Valor afirmativo</label>
+  <%= text_field_tag 'settings[activation_yes_value]', @settings['activation_yes_value'].presence || 'SÍ', size: 10 %>
+  <em>Se normaliza (tildes, comillas, mayúsculas): SÍ = SI.</em>
+</p>
+<p>
+  <label>Trackers elegibles (vacío = todos los cerrados con Sí)</label><br/>
+  <%= select_tag 'settings[eligible_tracker_ids][]',
+      options_from_collection_for_select(Tracker.order(:name), :id, :name, Array(@settings['eligible_tracker_ids']).map(&:to_i)),
+      multiple: true, size: 8 %>
+</p>
+<p>
+  <label>Proyectos elegibles (vacío = todos)</label><br/>
+  <%= select_tag 'settings[eligible_project_ids][]',
+      options_from_collection_for_select(Project.active.order(:name).limit(200), :id, :name, Array(@settings['eligible_project_ids']).map(&:to_i)),
+      multiple: true, size: 8 %>
+</p>
+<p>
+  <label>Estados elegibles (vacío = todos los cerrados)</label><br/>
+  <%= select_tag 'settings[eligible_status_ids][]',
+      options_from_collection_for_select(IssueStatus.order(:position), :id, :name, Array(@settings['eligible_status_ids']).map(&:to_i)),
+      multiple: true, size: 8 %>
+</p>
+<p>
+  <label>API de lectura (futura OneView)</label>
+  <%= check_box_tag 'settings[api_read_enabled]', '1', @settings['api_read_enabled'] == '1' %>
+  <em>Deshabilitada por defecto.</em>
+</p>
