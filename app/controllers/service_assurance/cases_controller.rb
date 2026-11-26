@@ -69,6 +69,8 @@ module ServiceAssurance
       @carriers = FibrazoServiceAssurance::SettingsResolver.carrier_options
       @carriers |= [@evaluation.provider.to_s.strip] if @evaluation.provider.present?
       @tab_states = FibrazoServiceAssurance::SettingsResolver.tab_states(@sa_case, @evaluation)
+      @can_conciliate = allowed?(:manage_conciliations)
+      @can_reopen = allowed?(:reopen_service_assurance)
       @readonly_issue = true
     end
 
@@ -99,6 +101,15 @@ module ServiceAssurance
       'discard' => 'no_aplica'
     }.freeze
 
+    # Flujo lineal: cada estado solo ofrece sus siguientes.
+    TRANSITION_FLOW = {
+      'pendiente' => %w[save to_review discard],
+      'en_revision' => %w[save to_conciliate discard],
+      'por_conciliar' => %w[save close_accepted close_rejected],
+      'conciliado' => [],
+      'no_aplica' => []
+    }.freeze
+
     def update
       @evaluation = @sa_case.evaluation || @sa_case.build_evaluation
       attrs = params.key?(:evaluation) ? evaluation_params : {}
@@ -112,6 +123,9 @@ module ServiceAssurance
       if transition.present? && transition != 'save'
         unless TRANSITIONS.key?(transition)
           return update_fail('Transición inválida')
+        end
+        unless (TRANSITION_FLOW[@sa_case.status] || []).include?(transition)
+          return update_fail("Transición no disponible desde #{@sa_case.status}")
         end
         if %w[to_conciliate close_accepted close_rejected].include?(transition) && !allowed?(:manage_conciliations)
           return update_fail('Requiere permiso de conciliación')
@@ -230,6 +244,8 @@ module ServiceAssurance
       @carriers = FibrazoServiceAssurance::SettingsResolver.carrier_options
       @carriers |= [@evaluation.provider.to_s.strip] if @evaluation.provider.present?
       @tab_states = FibrazoServiceAssurance::SettingsResolver.tab_states(@sa_case, @evaluation)
+      @can_conciliate = allowed?(:manage_conciliations)
+      @can_reopen = allowed?(:reopen_service_assurance)
       render :show
     end
 

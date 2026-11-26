@@ -1,17 +1,19 @@
 <style>
-.sa-tabbar{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
-.sa-tabbar button{padding:6px 14px;border:1px solid #ccc;border-bottom:none;border-radius:6px 6px 0 0;cursor:pointer;background:#f5f5f5;font-weight:bold}
-.sa-tabbar button.todo{background:#f8d7da;border-color:#f5c6cb;color:#721c24}
-.sa-tabbar button.ok{background:#d4edda;border-color:#c3e6cb;color:#155724}
-.sa-tabbar button.active{box-shadow:inset 0 3px 0 #2b7cd3}
-.sa-panel{display:none;border:1px solid #ccc;padding:12px;border-radius:0 6px 6px 6px;background:#fff}
+.sa-tabbar{display:flex;gap:2px;flex-wrap:wrap;margin:6px 0;border-bottom:2px solid #e2e5e9}
+.sa-tabbar button{padding:6px 10px;border:none;background:none;cursor:pointer;font-size:13px;color:#444;font-weight:600;border-bottom:2px solid transparent;margin-bottom:-2px}
+.sa-tabbar button .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:1px}
+.sa-tabbar button .dot.ok{background:#2e7d32}
+.sa-tabbar button .dot.todo{background:#d32f2f}
+.sa-tabbar button.active{border-bottom-color:#2b7cd3;color:#111}
+.sa-panel{display:none;padding:10px 2px}
 .sa-panel.active{display:block}
 .sa-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px 16px}
 .sa-grid .full{grid-column:1/-1}
 .sa-grid label{display:block;font-weight:bold;margin-bottom:2px}
 .sa-grid input,.sa-grid select,.sa-grid textarea{width:100%;max-width:100%;box-sizing:border-box}
 .sa-grid input[readonly]{background:#f4f4f4}
-.sa-calc{background:#eef4fb;border:1px solid #b8d4f0;border-radius:4px;padding:6px 10px;margin:8px 0}
+.sa-calc{font-size:12.5px;color:#5b6570;margin:6px 0}
+.sa-calc strong{color:#111}
 .sa-journal{margin:6px 0;border:1px solid #e0e0e0;border-radius:4px}
 .sa-journal summary{cursor:pointer;padding:4px 8px;background:#f7f7f7}
 .sa-journal .wiki{padding:4px 8px}
@@ -36,16 +38,15 @@
 
 <div class="sa-tabs">
 <div class="sa-tabbar">
-<button type="button" data-tab="panel-a" class="<%= @tab_states[:a] ? 'ok' : 'todo' %> active">A. Ticket</button>
-<button type="button" data-tab="panel-b" class="<%= @tab_states[:b] ? 'ok' : 'todo' %>">B. Evaluación</button>
-<button type="button" data-tab="panel-c" class="<%= @tab_states[:c] ? 'ok' : 'todo' %>">C. Contractual</button>
-<button type="button" data-tab="panel-d" class="<%= @tab_states[:d] ? 'ok' : 'todo' %>">D. Conciliación</button>
-<button type="button" data-tab="panel-f" class="ok">Auditoría</button>
+<button type="button" data-tab="panel-a" class="active"><span class="dot <%= @tab_states[:a] ? 'ok' : 'todo' %>"></span>A. Ticket</button>
+<button type="button" data-tab="panel-b"><span class="dot <%= @tab_states[:b] ? 'ok' : 'todo' %>"></span>B. Evaluación</button>
+<button type="button" data-tab="panel-c"><span class="dot <%= @tab_states[:c] ? 'ok' : 'todo' %>"></span>C. Contractual</button>
+<button type="button" data-tab="panel-d"><span class="dot <%= @tab_states[:d] ? 'ok' : 'todo' %>"></span>D. Conciliación</button>
+<button type="button" data-tab="panel-f"><span class="dot ok"></span>Auditoría</button>
 </div>
 
 <section class="sa-panel active" id="panel-a">
 <h3>A. Información original del ticket (solo lectura)</h3>
-<div class="box">
   <p><strong>Asunto:</strong> <%= @issue.subject %></p>
   <% snap = @sa_case.original_snapshot || {} %>
   <% if snap.any? %>
@@ -64,7 +65,6 @@
   · <strong>Adjuntos (<%= @attachments.size %>):</strong>
   <% @attachments.each do |a| %><%= link_to a.filename, attachment_path(a) %> <% end %></p>
   <% end %>
-</div>
 </section>
 
 <%= form_for :evaluation, url: "/service_assurance/cases/#{@sa_case.id}", html: { method: :patch, id: 'sa-form', 'data-ticket-start' => snap.dig('inicio', 'raw').to_s, 'data-ticket-end' => snap.dig('fin', 'raw').to_s } do |f| %>
@@ -89,13 +89,12 @@
 <div class="sa-grid">
   <div><label>¿Aplica ANS?</label><%= f.select :ans_applies, [['—', ''], ['Sí', true], ['No', false]], selected: @evaluation.ans_applies.nil? ? '' : @evaluation.ans_applies %></div>
   <div><label>Fecha de reporte / envío al proveedor</label><%= f.date_field :reported_on, value: @evaluation.reported_on %></div>
-  <div><label>Inicio de indisponibilidad a objetar
-    <button type="button" class="sa-mini" id="pull-start" title="Traer inicio de falla del ticket">↙ <svg width="11" height="11" viewBox="0 0 16 16"><path d="M8 2v11M3 8l5 5 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></button></label>
+  <div><label>Inicio de indisponibilidad a objetar</label>
     <%= f.datetime_field :contract_start_at, value: @evaluation.contract_start_at, id: 'ev-contract-start' %></div>
-  <div><label>Fin de indisponibilidad a objetar
-    <button type="button" class="sa-mini" id="pull-end" title="Traer fin de falla del ticket">↙ <svg width="11" height="11" viewBox="0 0 16 16"><path d="M8 2v11M3 8l5 5 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></button></label>
+  <div><label>Fin de indisponibilidad a objetar</label>
     <%= f.datetime_field :contract_end_at, value: @evaluation.contract_end_at, id: 'ev-contract-end' %></div>
-  <div><label>Indisponibilidad computable (min, automática)</label><%= f.number_field :downtime_minutes, value: @evaluation.downtime_minutes, id: 'ev-downtime', readonly: true %></div>
+  <div><label>Indisponibilidad (min)</label><%= f.number_field :downtime_minutes, value: @evaluation.downtime_minutes, id: 'ev-downtime', readonly: true %></div>
+  <div><label>&nbsp;</label><button type="button" class="sa-mini" id="pull-both" title="Traer inicio y fin de falla del ticket (CF21/CF22)">↙ Traer fechas del ticket <svg width="11" height="11" viewBox="0 0 16 16"><path d="M8 2v11M3 8l5 5 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></button></div>
   <div class="full"><label>Exclusiones</label><%= f.text_area :exclusions, value: @evaluation.exclusions, rows: 2 %></div>
 </div>
 </section>
@@ -108,23 +107,50 @@
 <div class="sa-calc">Diferencia (computable − reconocido): <strong id="calc-diff">—</strong> · Se calcula sola al guardar.</div>
 <div class="sa-grid">
   <div><label>Tiempos reconocidos (min)</label><%= f.number_field :acknowledged_minutes, value: @evaluation.acknowledged_minutes, id: 'ev-ack' %></div>
-  <div><label>Diferencia (min, automática)</label><%= f.number_field :difference_minutes, value: @evaluation.difference_minutes, id: 'ev-diff', readonly: true %></div>
+  <div><label>Diferencia (min)</label><%= f.number_field :difference_minutes, value: @evaluation.difference_minutes, id: 'ev-diff', readonly: true %></div>
   <div><label>Créditos reconocidos</label><%= f.number_field :credit_granted, value: @evaluation.credit_granted, step: 0.01 %></div>
   <div><label>Resultado</label><strong><%= @evaluation.result.presence || 'pendiente' %></strong></div>
   <div class="full"><label>Motivo / observaciones de cierre</label><%= f.text_area :conciliation_notes, value: @evaluation.conciliation_notes, rows: 3 %></div>
 </div>
 </section>
 
+<% flow = (ServiceAssurance::CasesController::TRANSITION_FLOW[@sa_case.status] || []) %>
 <div class="sa-flow">
-<%= button_tag 'Guardar avance', type: 'submit', name: 'transition', value: 'save', class: 'sa-btn primary' %>
-<%= button_tag 'Enviar a revisión', type: 'submit', name: 'transition', value: 'to_review', class: 'sa-btn' %>
-<%= button_tag 'Enviar a conciliación', type: 'submit', name: 'transition', value: 'to_conciliate', class: 'sa-btn' %>
-<%= button_tag 'No aplica', type: 'submit', name: 'transition', value: 'discard', class: 'sa-btn', data: { confirm: 'Marcar como no aplica?' } %>
-<%= button_tag 'Cerrar: reconocida', type: 'submit', name: 'transition', value: 'close_accepted', class: 'sa-btn', data: { confirm: 'Cerrar conciliación como reconocida?' } %>
-<%= button_tag 'Cerrar: rechazada', type: 'submit', name: 'transition', value: 'close_rejected', class: 'sa-btn danger', data: { confirm: 'Cerrar conciliación como rechazada? Deje el motivo.' } %>
+<input type="hidden" name="transition" id="sa-transition" value="save">
+<% if flow.include?('save') %><button type="submit" class="sa-btn primary" data-t="save">Guardar avance</button><% end %>
+<% if flow.include?('to_review') %><button type="submit" class="sa-btn" data-t="to_review">Enviar a revisión</button><% end %>
+<% if flow.include?('to_conciliate') && @can_conciliate %><button type="submit" class="sa-btn" data-t="to_conciliate">Enviar a conciliación</button><% end %>
+<% if flow.include?('discard') %><button type="submit" class="sa-btn" data-t="discard" data-confirm="Marcar como no aplica?">No aplica</button><% end %>
+<% if flow.include?('close_accepted') && @can_conciliate %><button type="button" class="sa-btn" id="btn-accept">Cerrar: reconocida</button><% end %>
+<% if flow.include?('close_rejected') && @can_conciliate %><button type="button" class="sa-btn danger" id="btn-reject">Cerrar: rechazada</button><% end %>
+<% if @sa_case.final? %>
+  <span>Caso finalizado: <strong><%= @evaluation.result.presence || @sa_case.status %></strong></span>
+  <% if @can_reopen %>
+    <%= form_tag("/service_assurance/cases/#{@sa_case.id}/reopen", method: :post, style: 'display:inline') do %><%= submit_tag 'Reabrir', class: 'sa-btn' %><% end %>
+  <% end %>
+<% end %>
 <span id="sa-saved"></span>
 </div>
 <% end %>
+
+<dialog id="dlg-accept">
+  <p><strong>Cerrar conciliación como reconocida</strong></p>
+  <p><label>Fecha reporte / envío</label><input type="date" id="dlg-acc-date"></p>
+  <p><label>Tiempo reconocido (min)</label><input type="number" id="dlg-acc-min"></p>
+  <menu>
+    <button type="button" id="dlg-acc-ok" class="sa-btn primary">Confirmar cierre</button>
+    <button type="button" id="dlg-acc-cancel" class="sa-btn">Cancelar</button>
+  </menu>
+</dialog>
+<dialog id="dlg-reject">
+  <p><strong>Cerrar conciliación como rechazada</strong></p>
+  <p><label>Motivo del rechazo</label><textarea id="dlg-rej-motivo" rows="3" cols="40"></textarea></p>
+  <p><label>Tiempo reconocido (min, si aplica)</label><input type="number" id="dlg-rej-min"></p>
+  <menu>
+    <button type="button" id="dlg-rej-ok" class="sa-btn primary">Confirmar cierre</button>
+    <button type="button" id="dlg-rej-cancel" class="sa-btn">Cancelar</button>
+  </menu>
+</dialog>
 
 <section class="sa-panel" id="panel-f">
 <h3>Auditoría</h3>
@@ -172,19 +198,67 @@ function saAutosave(){
         if(j.lock_version!=null)document.getElementById('ev-lock').value=j.lock_version;
         if(j.downtime!=null)document.getElementById('ev-downtime').value=j.downtime;
         if(j.difference!=null)document.getElementById('ev-diff').value=j.difference;
+        saApplyTabs(j.tab_states);
         saCalc();
       }else{badge.textContent='Error: '+(j.error||'no guardado');}
     })
     .catch(function(){badge.textContent='Sin conexión: no guardado';});
 }
 document.getElementById('sa-form').addEventListener('input',function(){saCalc();clearTimeout(saTimer);saTimer=setTimeout(saAutosave,1500);});
-document.getElementById('pull-start').addEventListener('click',function(){
-  var v=saToLocal(document.getElementById('sa-form').getAttribute('data-ticket-start'));
-  if(v){document.getElementById('ev-contract-start').value=v;saCalc();saAutosave();}
+var pullBoth=document.getElementById('pull-both');
+if(pullBoth){pullBoth.addEventListener('click',function(){
+  var f=document.getElementById('sa-form');
+  var vs=saToLocal(f.getAttribute('data-ticket-start'));
+  var ve=saToLocal(f.getAttribute('data-ticket-end'));
+  if(vs)document.getElementById('ev-contract-start').value=vs;
+  if(ve)document.getElementById('ev-contract-end').value=ve;
+  saCalc();saAutosave();
+});}
+function saApplyTabs(ts){
+  if(!ts)return;
+  var map={'a':'panel-a','b':'panel-b','c':'panel-c','d':'panel-d','f':'panel-f'};
+  Object.keys(map).forEach(function(k){
+    var btn=document.querySelector('.sa-tabbar button[data-tab="'+map[k]+'"]');
+    if(!btn)return;
+    var dot=btn.querySelector('.dot');
+    if(dot){dot.classList.remove('ok','todo');dot.classList.add(ts[k]?'ok':'todo');}
+  });
+}
+document.querySelectorAll('.sa-flow button[data-t]').forEach(function(b){
+  b.addEventListener('click',function(){document.getElementById('sa-transition').value=b.getAttribute('data-t');});
 });
-document.getElementById('pull-end').addEventListener('click',function(){
-  var v=saToLocal(document.getElementById('sa-form').getAttribute('data-ticket-end'));
-  if(v){document.getElementById('ev-contract-end').value=v;saCalc();saAutosave();}
+var dlgA=document.getElementById('dlg-accept'),dlgR=document.getElementById('dlg-reject');
+var btnA=document.getElementById('btn-accept'),btnR=document.getElementById('btn-reject');
+if(btnA){btnA.addEventListener('click',function(){
+  document.getElementById('dlg-acc-date').value=(document.querySelector('[name="evaluation[reported_on]"]')||{}).value||'';
+  document.getElementById('dlg-acc-min').value=(document.getElementById('ev-ack')||{}).value||'';
+  dlgA.showModal();
+});}
+if(btnR){btnR.addEventListener('click',function(){
+  document.getElementById('dlg-rej-motivo').value=(document.querySelector('[name="evaluation[conciliation_notes]"]')||{}).value||'';
+  document.getElementById('dlg-rej-min').value=(document.getElementById('ev-ack')||{}).value||'';
+  dlgR.showModal();
+});}
+document.getElementById('dlg-acc-cancel').addEventListener('click',function(){dlgA.close();});
+document.getElementById('dlg-rej-cancel').addEventListener('click',function(){dlgR.close();});
+document.getElementById('dlg-acc-ok').addEventListener('click',function(){
+  var d=document.getElementById('dlg-acc-date').value,m=document.getElementById('dlg-acc-min').value;
+  var rep=document.querySelector('[name="evaluation[reported_on]"]'),ack=document.getElementById('ev-ack');
+  if(rep&&d)rep.value=d;
+  if(ack&&m!=='')ack.value=m;
+  dlgA.close();
+  document.getElementById('sa-transition').value='close_accepted';
+  document.getElementById('sa-form').submit();
+});
+document.getElementById('dlg-rej-ok').addEventListener('click',function(){
+  var mo=document.getElementById('dlg-rej-motivo').value,m=document.getElementById('dlg-rej-min').value;
+  if(!mo.trim()){alert('Indique el motivo del rechazo');return;}
+  var notes=document.querySelector('[name="evaluation[conciliation_notes]"]'),ack=document.getElementById('ev-ack');
+  if(notes)notes.value=mo;
+  if(ack&&m!=='')ack.value=m;
+  dlgR.close();
+  document.getElementById('sa-transition').value='close_rejected';
+  document.getElementById('sa-form').submit();
 });
 saCalc();
 document.querySelectorAll('.sa-tabbar button').forEach(function(btn){
