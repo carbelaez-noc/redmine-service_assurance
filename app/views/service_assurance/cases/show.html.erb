@@ -22,6 +22,10 @@
 .sa-snap .full{grid-column:1/-1}
 .sa-cierre{grid-template-columns:repeat(3,1fr);border-top:2px solid #e2e5e9;padding-top:6px}
 .sa-fila3{grid-template-columns:repeat(3,1fr)}
+.sa-line{display:flex;gap:0;overflow-x:auto;margin:8px 0;border:1px solid #e2e5e9;border-radius:6px}
+.sa-line>div{flex:1 0 auto;padding:4px 12px;border-left:1px solid #e2e5e9;white-space:nowrap}
+.sa-line>div:first-child{border-left:none}
+.sa-line span{display:block;font-size:10px;color:#5b6570;font-weight:bold;text-transform:uppercase;letter-spacing:.03em}
 .sa-flow{margin-top:10px;padding-top:8px;border-top:1px solid #ddd;display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end}
 .sa-flow .sa-btn{font-size:12.5px;padding:4px 12px;border-radius:6px;border:1px solid #cfd4d9;background:#fff;cursor:pointer}
 .sa-flow .sa-btn.primary{background:#1f6feb;border-color:#1f6feb;color:#fff;font-weight:600}
@@ -45,7 +49,7 @@ dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 
 @media (max-width:800px){.sa-grid{grid-template-columns:1fr}.sa-cierre,.sa-fila3{grid-template-columns:1fr 1fr}}
 </style>
 <h2>Service Assurance — Caso #<%= @sa_case.id %> (ticket <%= link_to issue_folio(@issue), issue_path(@issue) %>)</h2>
-<div class="sa-subnav"><%= link_to '← Volver a la bandeja', service_assurance_path %> <%= link_to 'Ver todos los casos', '/service_assurance?sa_status=' %> <%= link_to 'Abrir ticket en otra pestaña', issue_path(@issue), target: '_blank' %> <a href="#sa-audit">Ver auditoría</a></div>
+<div class="sa-subnav"><%= link_to '← Volver a la bandeja', service_assurance_path %> <%= link_to 'Ver todos los casos', '/service_assurance?sa_status=' %> <%= link_to 'Abrir ticket en otra pestaña', issue_path(@issue), target: '_blank' %> <a href="#" id="sa-audit-toggle">Ver auditoría</a></div>
 <div class="sa-snap">
   <div class="full"><span>Ticket</span><%= link_to issue_folio(@issue), issue_path(@issue) %> — <%= @issue.subject %></div>
   <div><span>Estado</span><%= sa_status_label(@sa_case.status) %></div>
@@ -65,23 +69,9 @@ dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 
   <p><strong>Asunto:</strong> <%= @issue.subject %></p>
   <% snap = @sa_case.original_snapshot || {} %>
   <% if snap.any? %>
-  <% labels = { 'ciudad' => 'Ciudad', 'inicio' => 'Inicio de falla', 'fin' => 'Fin de falla', 'clientes' => 'Clientes afectados', 'motivo_apertura' => 'Motivo de apertura' } %>
-  <% fila3 = { 'carrier' => 'Carrier', 'caso_isp' => '# Caso ISP', 'id_externo' => 'ID externo' } %>
-  <% cierre = { 'categoria' => 'Categoría de cierre', 'subcategoria' => 'Subcategoría de cierre', 'motivo' => 'Motivo de cierre' } %>
-  <div class="sa-snap">
-    <% labels.each do |key, label| %>
-      <% raw = snap.dig(key, 'raw') %>
-      <div class="<%= key == 'motivo_apertura' ? 'full' : '' %>"><span><%= label %></span><%= FibrazoServiceAssurance::PreloadMap.display(raw) %></div>
-    <% end %>
-  </div>
-  <div class="sa-snap sa-fila3">
-    <% fila3.each do |key, label| %>
-      <% raw = snap.dig(key, 'raw') %>
-      <div><span><%= label %></span><%= FibrazoServiceAssurance::PreloadMap.display(raw) %></div>
-    <% end %>
-  </div>
-  <div class="sa-snap sa-cierre">
-    <% cierre.each do |key, label| %>
+  <% line = { 'ciudad' => 'Ciudad', 'inicio' => 'Inicio de falla', 'fin' => 'Fin de falla', 'clientes' => 'Clientes afectados', 'motivo_apertura' => 'Motivo de apertura', 'carrier' => 'Carrier', 'caso_isp' => '# Caso ISP', 'id_externo' => 'ID externo', 'categoria' => 'Categoría de cierre', 'subcategoria' => 'Subcategoría de cierre', 'motivo' => 'Motivo de cierre' } %>
+  <div class="sa-line">
+    <% line.each do |key, label| %>
       <% raw = snap.dig(key, 'raw') %>
       <div><span><%= label %></span><%= FibrazoServiceAssurance::PreloadMap.display(raw) %></div>
     <% end %>
@@ -184,7 +174,7 @@ dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 
   </menu>
 </dialog>
 
-<section id="sa-audit">
+<section id="sa-audit" style="display:none">
 <h3>Auditoría</h3>
 <table class="list">
   <thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Campo</th><th>Antes</th><th>Después</th></tr></thead>
@@ -320,6 +310,15 @@ document.getElementById('dlg-rej-ok').addEventListener('click',function(){
 });
 saCalc();
 saLimits();
+var saAuditT=document.getElementById('sa-audit-toggle');
+if(saAuditT){saAuditT.addEventListener('click',function(e){
+  e.preventDefault();
+  var s=document.getElementById('sa-audit');
+  var show=s.style.display==='none';
+  s.style.display=show?'':'none';
+  saAuditT.textContent=show?'Ocultar auditoría':'Ver auditoría';
+  if(show)s.scrollIntoView();
+});}
 document.querySelectorAll('.sa-tabbar button').forEach(function(btn){
   btn.addEventListener('click',function(){
     document.querySelectorAll('.sa-tabbar button').forEach(function(b){b.classList.remove('active');});
