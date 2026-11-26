@@ -143,6 +143,13 @@ module ServiceAssurance
           @evaluation.result = 'rechazada'
           changed << ['result', '', 'rechazada']
         end
+        if transition == 'close_accepted'
+          return update_fail('Cierre requiere fecha de reporte / envío') if @evaluation.reported_on.blank?
+          return update_fail('Cierre requiere tiempo reconocido') if @evaluation.acknowledged_minutes.nil?
+        end
+        if transition == 'close_rejected' && @evaluation.conciliation_notes.to_s.strip.empty?
+          return update_fail('Cierre rechazado requiere motivo')
+        end
       elsif @sa_case.final? && !allowed?(:reopen_service_assurance)
         return update_fail('Evaluación finalizada: requiere permiso de reapertura')
       end

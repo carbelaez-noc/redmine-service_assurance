@@ -29,6 +29,12 @@
 .sa-mini{border:1px solid #cfd4d9;background:#fff;border-radius:4px;padding:1px 5px;cursor:pointer;font-size:12px;line-height:1.2}
 .sa-mini:hover{background:#eef4ff}
 #sa-saved{color:#155724;font-weight:bold}
+dialog.sa-dlg{border:1px solid #cfd4d9;border-radius:10px;padding:18px 20px;max-width:420px;box-shadow:0 8px 30px rgba(0,0,0,.18)}
+dialog.sa-dlg::backdrop{background:rgba(20,30,45,.45)}
+dialog.sa-dlg h3{margin:0 0 8px;font-size:15px}
+dialog.sa-dlg label{display:block;font-size:11px;color:#5b6570;font-weight:bold;text-transform:uppercase;letter-spacing:.03em;margin:8px 0 2px}
+dialog.sa-dlg input,dialog.sa-dlg textarea{width:100%;box-sizing:border-box;border:1px solid #cfd4d9;border-radius:6px;padding:5px 8px;font-size:13px}
+dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 0;margin:0}
 .sa-subnav{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
 .sa-subnav a{display:inline-block;padding:4px 12px;border:1px solid #cfd4d9;border-radius:6px;background:#fff;text-decoration:none;font-size:12.5px;color:#1f6feb;font-weight:600}
 .sa-subnav a:hover{background:#eef4ff;text-decoration:none}
@@ -47,7 +53,7 @@
 <div class="sa-tabbar">
 <button type="button" data-tab="panel-a" class="<%= @tab_states[:a] ? 'ok' : 'todo' %> active">A. Ticket</button>
 <button type="button" data-tab="panel-b" class="<%= @tab_states[:b] ? 'ok' : 'todo' %>">B. Evaluación y contractual</button>
-<button type="button" data-tab="panel-d" class="<%= @tab_states[:d] ? 'ok' : 'todo' %>">C. Conciliación</button>
+<% if %w[por_conciliar conciliado].include?(@sa_case.status) %><button type="button" data-tab="panel-d" class="<%= @tab_states[:d] ? 'ok' : 'todo' %>">C. Conciliación</button><% end %>
 <button type="button" data-tab="panel-f" class="ok">Auditoría</button>
 </div>
 
@@ -97,6 +103,7 @@
 <p class="sa-hint">* El escalamiento es obligatorio para avanzar. Las fechas no aceptan futuro ni anteriores al inicio de la falla.</p>
 </section>
 
+<% if %w[por_conciliar conciliado].include?(@sa_case.status) %>
 <section class="sa-panel" id="panel-d">
 <h3>C. Conciliación</h3>
 <% if @evaluation.conciliation_applies != true %>
@@ -111,6 +118,7 @@
   <div class="full"><label>Motivo / observaciones de cierre</label><%= f.text_area :conciliation_notes, value: @evaluation.conciliation_notes, rows: 3 %></div>
 </div>
 </section>
+<% end %>
 
 <% flow = (ServiceAssurance::CasesController::TRANSITION_FLOW[@sa_case.status] || []) %>
 <div class="sa-flow">
@@ -131,19 +139,21 @@
 </div>
 <% end %>
 
-<dialog id="dlg-accept">
-  <p><strong>Cerrar conciliación como reconocida</strong></p>
-  <p><label>Fecha reporte / envío</label><input type="date" id="dlg-acc-date"></p>
-  <p><label>Tiempo reconocido (min)</label><input type="number" id="dlg-acc-min"></p>
+<dialog id="dlg-accept" class="sa-dlg">
+  <h3>Cerrar conciliación como reconocida</h3>
+  <p class="sa-hint">Fecha y tiempo obligatorios: quedan registrados en el cierre.</p>
+  <label>Fecha reporte / envío *</label><input type="date" id="dlg-acc-date" required>
+  <label>Tiempo reconocido (min) *</label><input type="number" id="dlg-acc-min" required>
   <menu>
     <button type="button" id="dlg-acc-ok" class="sa-btn primary">Confirmar cierre</button>
     <button type="button" id="dlg-acc-cancel" class="sa-btn">Cancelar</button>
   </menu>
 </dialog>
-<dialog id="dlg-reject">
-  <p><strong>Cerrar conciliación como rechazada</strong></p>
-  <p><label>Motivo del rechazo</label><textarea id="dlg-rej-motivo" rows="3" cols="40"></textarea></p>
-  <p><label>Tiempo reconocido (min, si aplica)</label><input type="number" id="dlg-rej-min"></p>
+<dialog id="dlg-reject" class="sa-dlg">
+  <h3>Cerrar conciliación como rechazada</h3>
+  <p class="sa-hint">Motivo obligatorio. El tiempo solo si hubo reconocimiento parcial.</p>
+  <label>Motivo del rechazo *</label><textarea id="dlg-rej-motivo" rows="3" required></textarea>
+  <label>Tiempo reconocido (min, si aplica)</label><input type="number" id="dlg-rej-min">
   <menu>
     <button type="button" id="dlg-rej-ok" class="sa-btn primary">Confirmar cierre</button>
     <button type="button" id="dlg-rej-cancel" class="sa-btn">Cancelar</button>
@@ -250,6 +260,8 @@ document.getElementById('dlg-acc-cancel').addEventListener('click',function(){dl
 document.getElementById('dlg-rej-cancel').addEventListener('click',function(){dlgR.close();});
 document.getElementById('dlg-acc-ok').addEventListener('click',function(){
   var d=document.getElementById('dlg-acc-date').value,m=document.getElementById('dlg-acc-min').value;
+  if(!d){alert('Indique la fecha de reporte / envío');return;}
+  if(m===''){alert('Indique el tiempo reconocido');return;}
   var rep=document.querySelector('[name="evaluation[reported_on]"]'),ack=document.getElementById('ev-ack');
   if(rep&&d)rep.value=d;
   if(ack&&m!=='')ack.value=m;
