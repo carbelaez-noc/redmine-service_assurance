@@ -63,6 +63,9 @@ module ServiceAssurance
       @journals = @issue.journals.includes(:user).order(:id).to_a.select { |j| j.notes.present? }
       @attachments = @issue.attachments.to_a
       @suggested = ServiceAssuranceInterval.suggested_downtime(@sa_case.id)
+      @carriers = FibrazoServiceAssurance::SettingsResolver.carrier_options
+      @carriers |= [@evaluation.provider.to_s.strip] if @evaluation.provider.present?
+      @tab_states = FibrazoServiceAssurance::SettingsResolver.tab_states(@sa_case, @evaluation)
       @readonly_issue = true
     end
 
@@ -143,6 +146,39 @@ module ServiceAssurance
       @sa_case.update!(status: 'por_conciliar')
       ServiceAssuranceAudit.log(@sa_case.id, User.current.id, 'conciliate', 'status', nil)
       redirect_to service_assurance_case_path(@sa_case)
+    end
+
+    # Exporta los casos del periodo en formato de entrega al carrier (XLSX).
+    def export
+      unless allowed?(:view_service_assurance)
+        render_403 and return
+      end
+      from = params[:sa_from].to_s.strip
+      to = params[:sa_to].to_s.strip
+      carrier = params[:sa_carrier].to_s.strip
+      cases = ServiceAssuranceCase.includes(:issue, :evaluation, :assignee, :circuits)
+      if from.match?(/\A\d{4}-\d{2}-\d{2}\z/) || to.match?(/\A\d{4}-\d{2}-\d{2}\z/)
+        cases = cases.joins(:issue)
+        cases = cases.where('issues.closed_on >= ?', Date.parse(from).beginning_of_day) if from.match?(/\A\d{4}-\d{2}-\d{2}\z/)
+        cases = cases.where('issues.closed_on <= ?', Date.parse(to).end_of_day) if to.match?(/\A\d{4}-\d{2}-\d{2}\z/)
+      end
+      rows = cases.order(:id).limit(2000).map do |sa|
+        ev = sa.evaluation
+        issue = sa.issue
+        circuits = sa.circuits.any? ? sa.circuits.map(&:circuit).join('; ') : ev&.circuit.to_s
+        fmt = ->(v) { v.respond_to?(:strftime) ? v.strftime('%Y-%m-%d %H:%M') : v.to_s }
+        [sa.id, issue&.id, issue&.subject, fmt.call(issue&.closed_on), ev&.provider,
+         circuits, ev&.external_case, fmt.call(ev&.real_start_at), fmt.call(ev&.real_end_at),
+         ev&.downtime_minutes, ev&.affected_customers, ev&.impact_type,
+         ev&.ans_applies.nil? ? '' : (ev.ans_applies ? 'Sí' : 'No'),
+         ev&.conciliation_applies.nil? ? '' : (ev.conciliation_applies ? 'Sí' : 'No'),
+         ev&.acknowledged_minutes, ev&.difference_minutes, ev&.result,
+         ev&.credit_requested, ev&.credit_granted, sa.status, sa.assignee&.login]
+      end
+      rows.select! { |r| r[4].to_s.downcase.include?(carrier.downcase) } if carrier.present?
+      data = FibrazoServiceAssurance::CarrierXlsx.build(rows)
+      send_data data, filename: "service_assurance_#{Date.today.strftime('%Y%m%d')}.xlsx",
+                      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     end
 
     def reopen

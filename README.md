@@ -46,3 +46,13 @@ límite 100. Sin Krill, sin colectores. API de lectura deshabilitada por defecto
 - Concurrencia: `lock_version` en casos y evaluaciones (StaleObjectError → aviso).
 - Bandeja: filtros periodo/estado/carrier/evaluador + columnas antigüedad/carrier/evaluador; responsable autoasignado al primer guardado.
 - Detalle: journals con notas y adjuntos del ticket en solo lectura.
+
+## v0.3.1 (P2.1 cierre)
+
+- T3 resuelto: CF18 «Clientes afectados» es campo calculado (redmine_computed_custom_field)
+  + no editable (`force_default_value_on_noneditable_custom_fields`); cualquier escritura
+  manual vía API se revierte a la fórmula (0 sin contactos). Preexistente, ajeno a SA.
+  SA solo LEE CF18 y guarda afectados en sus propias tablas; verificado ticket intacto.
+- Pestañas con estado (rojo pastel = incompleta), grilla 2 columnas responsive,
+  carrier en lista configurable, cálculos JS en vivo, journals colapsables,
+  aviso condicional en D, export XLSX del periodo (CarrierXlsx con rubyzip, sin gemas).

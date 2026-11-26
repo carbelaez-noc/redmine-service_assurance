@@ -63,5 +63,27 @@ module FibrazoServiceAssurance
     def list_candidate_fields
       IssueCustomField.where(field_format: 'list').order(:name).pluck(:name, :id)
     end
+
+    # Lista configurable de carriers (uno por línea en el ajuste).
+    def carrier_options
+      settings['carrier_list'].to_s.lines.map(&:strip).reject(&:empty?).uniq.first(200)
+    end
+
+    # Completitud por pestaña para pintar el estado (rojo pastel = incompleta).
+    def tab_states(sa_case, evaluation)
+      ev = evaluation || ServiceAssuranceEvaluation.new
+      b = ev.provider.present? && ev.real_start_at.present? && ev.real_end_at.present? && !ev.affected_customers.nil?
+      c = !ev.ans_applies.nil? && ev.reported_on.present? && ev.contract_start_at.present? &&
+          ev.contract_end_at.present? && !ev.downtime_minutes.nil? && !ev.conciliation_applies.nil?
+      d = d_complete?(ev)
+      e = ev.circuit.present? || sa_case.circuits.any? || sa_case.intervals.any?
+      { a: true, b: b, c: c, d: d, e: e, f: true }
+    end
+
+    def d_complete?(ev)
+      return true if ev.conciliation_applies == false
+      ev.sent_on.present? && !ev.acknowledged_minutes.nil? &&
+        !ev.difference_minutes.nil? && ev.result.present?
+    end
   end
 end

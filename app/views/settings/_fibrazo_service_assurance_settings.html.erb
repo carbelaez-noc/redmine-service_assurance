@@ -43,3 +43,8 @@
 </p>
 <% end %>
 </fieldset>
+<p>
+  <label>Carriers seleccionables (uno por línea)</label><br/>
+  <%= text_area_tag 'settings[carrier_list]', @settings['carrier_list'], rows: 4, cols: 40 %>
+  <em>Alimenta la lista desplegable de Proveedor en la evaluación.</em>
+</p>

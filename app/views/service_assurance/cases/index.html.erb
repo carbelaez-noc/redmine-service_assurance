@@ -11,6 +11,7 @@
   <label>Hasta</label>
   <%= date_field_tag 'sa_to', @to %>
   <%= submit_tag 'Filtrar', name: nil %>
+  <%= link_to 'Exportar XLSX (periodo)', "/service_assurance/cases/export?sa_from=#{@from}&sa_to=#{@to}&sa_carrier=#{@carrier_filter}", class: 'icon icon-excel' %>
 <% end %>
 <% if @issues.nil? %>
   <p class="nodata">Configure el campo de activación en Administración → ajustes del plugin.</p>

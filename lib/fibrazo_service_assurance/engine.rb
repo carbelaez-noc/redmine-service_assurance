@@ -3,6 +3,7 @@
 require_relative 'settings_resolver'
 require_relative 'preload_map'
 require_relative 'eligibility'
+require_relative 'carrier_xlsx'
 
 module FibrazoServiceAssurance
   class Engine < ::Rails::Engine
