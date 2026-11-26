@@ -90,7 +90,7 @@ module FibrazoServiceAssurance
 
     def d_complete?(ev)
       return true if ev.conciliation_applies == false
-      ev.sent_on.present? && !ev.acknowledged_minutes.nil? &&
+      ev.reported_on.present? && !ev.acknowledged_minutes.nil? &&
         !ev.difference_minutes.nil? && ev.result.present?
     end
   end

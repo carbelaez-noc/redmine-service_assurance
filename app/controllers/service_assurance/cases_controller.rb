@@ -10,6 +10,7 @@ module ServiceAssurance
 
     helper :issues
     helper ServiceAssurance::CasesHelper
+    include ServiceAssurance::CasesHelper
 
     def index
       scope = FibrazoServiceAssurance::SettingsResolver.eligible_scope
@@ -63,12 +64,8 @@ module ServiceAssurance
     def show
       @evaluation = @sa_case.evaluation || @sa_case.build_evaluation
       @issue = @sa_case.issue
-      @circuits = @sa_case.circuits.order(:id).to_a
-      @intervals = @sa_case.intervals.order(:start_at).to_a
       @audits = @sa_case.audits.order(id: :desc).limit(50)
-      @journals = @issue.journals.includes(:user).order(:id).to_a.select { |j| j.notes.present? }
       @attachments = @issue.attachments.to_a
-      @suggested = ServiceAssuranceInterval.suggested_downtime(@sa_case.id)
       @carriers = FibrazoServiceAssurance::SettingsResolver.carrier_options
       @carriers |= [@evaluation.provider.to_s.strip] if @evaluation.provider.present?
       @tab_states = FibrazoServiceAssurance::SettingsResolver.tab_states(@sa_case, @evaluation)
@@ -104,7 +101,7 @@ module ServiceAssurance
 
     def update
       @evaluation = @sa_case.evaluation || @sa_case.build_evaluation
-      attrs = evaluation_params
+      attrs = params.key?(:evaluation) ? evaluation_params : {}
       changed = []
       attrs.each do |k, v|
         old = @evaluation.send(k)
@@ -154,6 +151,7 @@ module ServiceAssurance
       end
       if request.xhr?
         render json: { ok: true, status: @sa_case.status, saved_at: Time.zone.now.strftime('%H:%M:%S'),
+                       lock_version: @evaluation.lock_version,
                        downtime: @evaluation.downtime_minutes, difference: @evaluation.difference_minutes,
                        tab_states: FibrazoServiceAssurance::SettingsResolver.tab_states(@sa_case, @evaluation) }
         return
@@ -199,7 +197,7 @@ module ServiceAssurance
         issue = sa.issue
         circuits = sa.circuits.any? ? sa.circuits.map(&:circuit).join('; ') : ev&.circuit.to_s
         fmt = ->(v) { v.respond_to?(:strftime) ? v.strftime('%Y-%m-%d %H:%M') : v.to_s }
-        [sa.id, issue&.id, issue&.subject, fmt.call(issue&.closed_on), ev&.provider,
+        [sa.id, issue&.id, issue_folio(issue), issue&.subject, fmt.call(issue&.closed_on), ev&.provider,
          circuits, ev&.external_case, fmt.call(ev&.real_start_at), fmt.call(ev&.real_end_at),
          ev&.downtime_minutes, ev&.affected_customers, ev&.impact_type,
          ev&.ans_applies.nil? ? '' : (ev.ans_applies ? 'Sí' : 'No'),
@@ -225,13 +223,13 @@ module ServiceAssurance
     private
 
     def render_show
+      @evaluation ||= @sa_case.evaluation || @sa_case.build_evaluation
       @issue = @sa_case.issue
-      @circuits = @sa_case.circuits.order(:id).to_a
-      @intervals = @sa_case.intervals.order(:start_at).to_a
       @audits = @sa_case.audits.order(id: :desc).limit(50)
-      @journals = @issue.journals.includes(:user).order(:id).to_a.select { |j| j.notes.present? }
       @attachments = @issue.attachments.to_a
-      @suggested = ServiceAssuranceInterval.suggested_downtime(@sa_case.id)
+      @carriers = FibrazoServiceAssurance::SettingsResolver.carrier_options
+      @carriers |= [@evaluation.provider.to_s.strip] if @evaluation.provider.present?
+      @tab_states = FibrazoServiceAssurance::SettingsResolver.tab_states(@sa_case, @evaluation)
       render :show
     end
 
@@ -317,13 +315,14 @@ module ServiceAssurance
 
     def evaluation_params
       # downtime/difference/conciliation/result: calculados o derivados en servidor, no editables.
+      # sent_on/external_verified: retirados del formulario (una sola fecha; sin verificación por ahora).
       params.require(:evaluation).permit(
         :lock_version,
-        :provider, :external_case, :external_verified, :impact_type,
+        :provider, :external_case, :impact_type,
         :real_start_at, :real_end_at, :affected_customers, :observations,
         :ans_applies, :reported_on, :contract_start_at, :contract_end_at,
         :exclusions,
-        :sent_on, :acknowledged_minutes, :conciliation_notes,
+        :acknowledged_minutes, :conciliation_notes,
         :credit_granted
       )
     end

@@ -69,3 +69,12 @@ límite 100. Sin Krill, sin colectores. API de lectura deshabilitada por defecto
 - Autoguardado AJAX por pestaña (JSON + indicador), sin recargar.
 - Folio corporativo (IMS…) + volver a bandeja; paginación nativa Redmine con
   filtro por defecto de abiertos.
+
+## v0.4.1 (UX + robustez)
+
+- Corrección crítica: el form nunca asignaba los campos (faltaba assign_attributes
+  desde v0.1.0); solo persistían estado/responsable/derivados. Verificado E2E por
+  controlador. La batería modelo no lo detectó (gap declarado).
+- render_show completo (tab_states/carriers) + lock_version en JSON y en el form:
+  adiós al falso "Otro evaluador guardó" y al 500 posterior.
+- Transiciones sin evaluation obligatoria; denegación 403 verificada.

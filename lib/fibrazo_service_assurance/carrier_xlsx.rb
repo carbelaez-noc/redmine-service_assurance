@@ -7,7 +7,7 @@ module FibrazoServiceAssurance
   # Una hoja, strings inline, estilos propios. Formato de entrega al carrier.
   class CarrierXlsx
     HEADERS = [
-      'Caso SA', 'Ticket', 'Asunto', 'Cierre ticket', 'Proveedor', 'Circuito(s)',
+      'Caso SA', 'Ticket', 'Folio', 'Asunto', 'Cierre ticket', 'Proveedor', 'Circuito(s)',
       'Caso externo', 'Inicio real', 'Fin real', 'Minutos indisponibilidad',
       'Clientes afectados', 'Tipo afectación', 'ANS aplica', 'Conciliación aplica',
       'Tiempos reconocidos (min)', 'Diferencia (min)', 'Resultado',

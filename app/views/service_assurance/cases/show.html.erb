@@ -15,13 +15,24 @@
 .sa-journal{margin:6px 0;border:1px solid #e0e0e0;border-radius:4px}
 .sa-journal summary{cursor:pointer;padding:4px 8px;background:#f7f7f7}
 .sa-journal .wiki{padding:4px 8px}
-.sa-flow{margin-top:10px;padding-top:8px;border-top:1px solid #ddd;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.sa-snap{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:6px 16px;margin:8px 0}
+.sa-snap div{border-bottom:1px dotted #e0e0e0;padding:3px 0}
+.sa-snap span{display:block;font-size:10.5px;color:#5b6570;font-weight:bold;text-transform:uppercase;letter-spacing:.03em}
+.sa-snap .full{grid-column:1/-1}
+.sa-flow{margin-top:10px;padding-top:8px;border-top:1px solid #ddd;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.sa-flow .sa-btn{font-size:12.5px;padding:4px 12px;border-radius:6px;border:1px solid #cfd4d9;background:#fff;cursor:pointer}
+.sa-flow .sa-btn.primary{background:#1f6feb;border-color:#1f6feb;color:#fff;font-weight:600}
+.sa-flow .sa-btn.primary:hover{background:#1a5fd0}
+.sa-flow .sa-btn:hover{background:#eef4ff}
+.sa-flow .sa-btn.danger{color:#b3261e}
+.sa-mini{border:1px solid #cfd4d9;background:#fff;border-radius:4px;padding:1px 5px;cursor:pointer;font-size:12px;line-height:1.2}
+.sa-mini:hover{background:#eef4ff}
 #sa-saved{color:#155724;font-weight:bold}
 @media (max-width:800px){.sa-grid{grid-template-columns:1fr}}
 </style>
 <h2>Service Assurance — Caso #<%= @sa_case.id %> (ticket <%= link_to issue_folio(@issue), issue_path(@issue) %>)</h2>
-<p><%= link_to '← Volver a la bandeja', service_assurance_path %> · <%= link_to 'Ver todos los casos', '/service_assurance?sa_status=' %></p>
-<p><strong>Estado SA:</strong> <%= @sa_case.status %> · <strong>Evaluador:</strong> <%= @sa_case.assignee ? @sa_case.assignee.login : '—' %> · <strong>Antigüedad:</strong> <%= @sa_case.age_days ? "#{@sa_case.age_days} días" : '—' %> · <strong>Ticket:</strong> <%= issue_folio(@issue) %> — <%= @issue.subject %> (<%= @issue.status.name %> · <%= @issue.project.name %>)</p>
+<p><%= link_to '← Volver a la bandeja', service_assurance_path %> · <%= link_to 'Ver todos los casos', '/service_assurance?sa_status=' %> · <%= link_to 'Abrir ticket en otra pestaña', issue_path(@issue), target: '_blank' %></p>
+<p><strong>Estado SA:</strong> <%= @sa_case.status %> · <strong>Evaluador:</strong> <%= @sa_case.assignee ? @sa_case.assignee.login : '—' %> · <strong>Antigüedad:</strong> <%= @sa_case.age_days ? "#{@sa_case.age_days} días" : '—' %> · <strong>Ticket:</strong> <%= issue_folio(@issue) %> — <%= @issue.subject %></p>
 
 <div class="sa-tabs">
 <div class="sa-tabbar">
@@ -36,48 +47,39 @@
 <h3>A. Información original del ticket (solo lectura)</h3>
 <div class="box">
   <p><strong>Asunto:</strong> <%= @issue.subject %></p>
-  <p><strong>Proyecto/Tracker:</strong> <%= @issue.project.name %> / <%= @issue.tracker.name %> · <strong>Cierre:</strong> <%= format_time(@issue.closed_on) %></p>
   <% snap = @sa_case.original_snapshot || {} %>
   <% if snap.any? %>
-  <table class="list">
-    <thead><tr><th>Dato original</th><th>Valor al abrir la evaluación</th></tr></thead>
-    <tbody>
-    <% { 'ciudad' => 'Ciudad', 'inicio' => 'Inicio de falla', 'fin' => 'Fin de falla', 'clientes' => 'Clientes afectados', 'carrier' => 'Carrier', 'caso_isp' => '# Caso ISP', 'categoria' => 'Categoría', 'subcategoria' => 'Subcategoría', 'motivo' => 'Motivo', 'id_externo' => 'ID externo' }.each do |key, label| %>
+  <% labels = { 'ciudad' => 'Ciudad', 'inicio' => 'Inicio de falla', 'fin' => 'Fin de falla', 'clientes' => 'Clientes afectados', 'carrier' => 'Carrier', 'caso_isp' => '# Caso ISP', 'categoria' => 'Categoría', 'subcategoria' => 'Subcategoría', 'motivo' => 'Motivo', 'id_externo' => 'ID externo' } %>
+  <div class="sa-snap">
+    <% labels.each do |key, label| %>
       <% raw = snap.dig(key, 'raw') %>
-      <tr><td><%= label %></td><td><%= FibrazoServiceAssurance::PreloadMap.display(raw) %></td></tr>
+      <div class="<%= key == 'motivo' ? 'full' : '' %>"><span><%= label %></span><%= FibrazoServiceAssurance::PreloadMap.display(raw) %></div>
     <% end %>
-    </tbody>
-  </table>
+  </div>
   <% end %>
   <p><strong>Descripción:</strong></p>
   <div class="wiki"><%= textilizable(@issue.description) %></div>
-  <% if @journals.any? %>
-  <p><strong>Notas del ticket (<%= @journals.size %>, clic para expandir):</strong></p>
-  <% @journals.each do |j| %>
-    <details class="sa-journal"><summary><%= j.user ? j.user.login : '?' %> — <%= format_time(j.created_on) %></summary><div class="wiki"><%= textilizable(j.notes) %></div></details>
-  <% end %>
-  <% end %>
+  <p><%= link_to 'Ver notas y avances en el ticket →', issue_path(@issue), target: '_blank' %>
   <% if @attachments.any? %>
-  <p><strong>Adjuntos (<%= @attachments.size %>):</strong>
+  · <strong>Adjuntos (<%= @attachments.size %>):</strong>
   <% @attachments.each do |a| %><%= link_to a.filename, attachment_path(a) %> <% end %></p>
   <% end %>
 </div>
 </section>
 
-<%= form_for :evaluation, url: "/service_assurance/cases/#{@sa_case.id}", html: { method: :patch, id: 'sa-form' } do |f| %>
-<%= f.hidden_field :lock_version, value: @evaluation.lock_version %>
+<%= form_for :evaluation, url: "/service_assurance/cases/#{@sa_case.id}", html: { method: :patch, id: 'sa-form', 'data-ticket-start' => snap.dig('inicio', 'raw').to_s, 'data-ticket-end' => snap.dig('fin', 'raw').to_s } do |f| %>
+<%= f.hidden_field :lock_version, value: @evaluation.lock_version, id: 'ev-lock' %>
 <section class="sa-panel" id="panel-b">
 <h3>B. Evaluación técnica (precargada, confirmable)</h3>
 <div class="sa-calc">Duración real: <strong id="calc-real">—</strong> · Clientes: <strong><%= @evaluation.affected_customers || '—' %></strong></div>
 <div class="sa-grid">
   <div><label>Proveedor (inventario carrier)</label><%= f.select :provider, [['— seleccionar —', '']] + @carriers.map { |c| [c, c] }, selected: @evaluation.provider %></div>
   <div><label>Número de escalamiento carrier</label><%= f.text_field :external_case, value: @evaluation.external_case %></div>
-  <div><label>Verificación del escalamiento</label><%= f.select :external_verified, %w[pendiente verificado discrepancia], selected: @evaluation.external_verified %></div>
-  <div><label>Tipo de afectación</label><%= f.text_field :impact_type, value: @evaluation.impact_type %></div>
+  <div><label>Tipo de afectación</label><%= f.select :impact_type, [['— seleccionar —', '']] + (['Falla total', 'Degradación', 'Intermitencia', 'Sin afectación'] | [@evaluation.impact_type.to_s]).reject(&:empty?).map { |v| [v, v] }, selected: @evaluation.impact_type %></div>
   <div><label>Inicio real</label><%= f.datetime_field :real_start_at, value: @evaluation.real_start_at, id: 'ev-real-start' %></div>
   <div><label>Fin real</label><%= f.datetime_field :real_end_at, value: @evaluation.real_end_at, id: 'ev-real-end' %></div>
   <div><label>Clientes afectados</label><%= f.number_field :affected_customers, value: @evaluation.affected_customers %></div>
-  <div class="full"><label>Observaciones extensas</label><%= f.text_area :observations, value: @evaluation.observations, rows: 4 %></div>
+  <div class="full"><label>Observaciones</label><%= f.text_area :observations, value: @evaluation.observations, rows: 4 %></div>
 </div>
 </section>
 
@@ -86,13 +88,16 @@
 <div class="sa-calc">Duración a objetar: <strong id="calc-contract">—</strong> · Se calcula sola desde el rango contractual al guardar.</div>
 <div class="sa-grid">
   <div><label>¿Aplica ANS?</label><%= f.select :ans_applies, [['—', ''], ['Sí', true], ['No', false]], selected: @evaluation.ans_applies.nil? ? '' : @evaluation.ans_applies %></div>
-  <div><label>Fecha de reporte al proveedor</label><%= f.date_field :reported_on, value: @evaluation.reported_on %></div>
-  <div><label>Inicio de indisponibilidad a objetar</label><%= f.datetime_field :contract_start_at, value: @evaluation.contract_start_at, id: 'ev-contract-start' %></div>
-  <div><label>Fin de indisponibilidad a objetar</label><%= f.datetime_field :contract_end_at, value: @evaluation.contract_end_at, id: 'ev-contract-end' %></div>
+  <div><label>Fecha de reporte / envío al proveedor</label><%= f.date_field :reported_on, value: @evaluation.reported_on %></div>
+  <div><label>Inicio de indisponibilidad a objetar
+    <button type="button" class="sa-mini" id="pull-start" title="Traer inicio de falla del ticket">↙ <svg width="11" height="11" viewBox="0 0 16 16"><path d="M8 2v11M3 8l5 5 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></button></label>
+    <%= f.datetime_field :contract_start_at, value: @evaluation.contract_start_at, id: 'ev-contract-start' %></div>
+  <div><label>Fin de indisponibilidad a objetar
+    <button type="button" class="sa-mini" id="pull-end" title="Traer fin de falla del ticket">↙ <svg width="11" height="11" viewBox="0 0 16 16"><path d="M8 2v11M3 8l5 5 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></button></label>
+    <%= f.datetime_field :contract_end_at, value: @evaluation.contract_end_at, id: 'ev-contract-end' %></div>
   <div><label>Indisponibilidad computable (min, automática)</label><%= f.number_field :downtime_minutes, value: @evaluation.downtime_minutes, id: 'ev-downtime', readonly: true %></div>
   <div class="full"><label>Exclusiones</label><%= f.text_area :exclusions, value: @evaluation.exclusions, rows: 2 %></div>
 </div>
-<p><em>Si aplica ANS, la conciliación queda marcada automáticamente (sin segundo campo).</em></p>
 </section>
 
 <section class="sa-panel" id="panel-d">
@@ -102,7 +107,6 @@
 <% end %>
 <div class="sa-calc">Diferencia (computable − reconocido): <strong id="calc-diff">—</strong> · Se calcula sola al guardar.</div>
 <div class="sa-grid">
-  <div><label>Fecha de envío al proveedor</label><%= f.date_field :sent_on, value: @evaluation.sent_on %></div>
   <div><label>Tiempos reconocidos (min)</label><%= f.number_field :acknowledged_minutes, value: @evaluation.acknowledged_minutes, id: 'ev-ack' %></div>
   <div><label>Diferencia (min, automática)</label><%= f.number_field :difference_minutes, value: @evaluation.difference_minutes, id: 'ev-diff', readonly: true %></div>
   <div><label>Créditos reconocidos</label><%= f.number_field :credit_granted, value: @evaluation.credit_granted, step: 0.01 %></div>
@@ -112,12 +116,12 @@
 </section>
 
 <div class="sa-flow">
-<%= button_tag 'Guardar avance', type: 'submit', name: 'transition', value: 'save' %>
-<%= button_tag 'Enviar a revisión', type: 'submit', name: 'transition', value: 'to_review' %>
-<%= button_tag 'Enviar a conciliación', type: 'submit', name: 'transition', value: 'to_conciliate' %>
-<%= button_tag 'No aplica', type: 'submit', name: 'transition', value: 'discard', data: { confirm: 'Marcar como no aplica?' } %>
-<%= button_tag 'Cerrar: reconocida', type: 'submit', name: 'transition', value: 'close_accepted', data: { confirm: 'Cerrar conciliación como reconocida?' } %>
-<%= button_tag 'Cerrar: rechazada', type: 'submit', name: 'transition', value: 'close_rejected', data: { confirm: 'Cerrar conciliación como rechazada? Deje el motivo.' } %>
+<%= button_tag 'Guardar avance', type: 'submit', name: 'transition', value: 'save', class: 'sa-btn primary' %>
+<%= button_tag 'Enviar a revisión', type: 'submit', name: 'transition', value: 'to_review', class: 'sa-btn' %>
+<%= button_tag 'Enviar a conciliación', type: 'submit', name: 'transition', value: 'to_conciliate', class: 'sa-btn' %>
+<%= button_tag 'No aplica', type: 'submit', name: 'transition', value: 'discard', class: 'sa-btn', data: { confirm: 'Marcar como no aplica?' } %>
+<%= button_tag 'Cerrar: reconocida', type: 'submit', name: 'transition', value: 'close_accepted', class: 'sa-btn', data: { confirm: 'Cerrar conciliación como reconocida?' } %>
+<%= button_tag 'Cerrar: rechazada', type: 'submit', name: 'transition', value: 'close_rejected', class: 'sa-btn danger', data: { confirm: 'Cerrar conciliación como rechazada? Deje el motivo.' } %>
 <span id="sa-saved"></span>
 </div>
 <% end %>
@@ -137,14 +141,20 @@
 <script>
 function saMin(a,b){if(!a||!b)return null;var ms=new Date(b)-new Date(a);if(isNaN(ms)||ms<=0)return null;return Math.round(ms/60000);}
 function saHuman(m){if(m==null)return '—';var h=Math.floor(m/60);return h>0?h+'h '+(m%60)+'m ('+m+' min)':m+' min';}
+function saToLocal(v){if(!v)return '';var d=new Date(v.replace(' ','T'));if(isNaN(d))return '';var p=function(n){return (n<10?'0':'')+n;};return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes());}
 function saCalc(){
   var rs=document.getElementById('ev-real-start'),re=document.getElementById('ev-real-end');
   var cs=document.getElementById('ev-contract-start'),ce=document.getElementById('ev-contract-end');
   document.getElementById('calc-real').textContent=saHuman(saMin(rs&&rs.value,re&&re.value));
-  document.getElementById('calc-contract').textContent=saHuman(saMin(cs&&cs.value,ce&&ce.value));
-  var dt=parseInt((document.getElementById('ev-downtime')||{}).value,10);
+  var cm=saMin(cs&&cs.value,ce&&ce.value);
+  document.getElementById('calc-contract').textContent=saHuman(cm);
+  var dtEl=document.getElementById('ev-downtime');
+  if(cm!=null&&dtEl)dtEl.value=cm;
   var ak=parseInt((document.getElementById('ev-ack')||{}).value,10);
-  document.getElementById('calc-diff').textContent=(!isNaN(dt)&&!isNaN(ak))?((dt-ak)+' min'):'—';
+  var df=document.getElementById('ev-diff');
+  var dv=(cm!=null&&!isNaN(ak))?(cm-ak):parseInt((df||{}).value,10);
+  document.getElementById('calc-diff').textContent=(!isNaN(dv)&&dv!=null)?(dv+' min'):'—';
+  if(cm!=null&&!isNaN(ak)&&df)df.value=cm-ak;
 }
 var saTimer=null;
 function saAutosave(){
@@ -159,6 +169,7 @@ function saAutosave(){
     .then(function(j){
       if(j.ok){
         badge.textContent='Guardado '+j.saved_at;
+        if(j.lock_version!=null)document.getElementById('ev-lock').value=j.lock_version;
         if(j.downtime!=null)document.getElementById('ev-downtime').value=j.downtime;
         if(j.difference!=null)document.getElementById('ev-diff').value=j.difference;
         saCalc();
@@ -167,6 +178,14 @@ function saAutosave(){
     .catch(function(){badge.textContent='Sin conexión: no guardado';});
 }
 document.getElementById('sa-form').addEventListener('input',function(){saCalc();clearTimeout(saTimer);saTimer=setTimeout(saAutosave,1500);});
+document.getElementById('pull-start').addEventListener('click',function(){
+  var v=saToLocal(document.getElementById('sa-form').getAttribute('data-ticket-start'));
+  if(v){document.getElementById('ev-contract-start').value=v;saCalc();saAutosave();}
+});
+document.getElementById('pull-end').addEventListener('click',function(){
+  var v=saToLocal(document.getElementById('sa-form').getAttribute('data-ticket-end'));
+  if(v){document.getElementById('ev-contract-end').value=v;saCalc();saAutosave();}
+});
 saCalc();
 document.querySelectorAll('.sa-tabbar button').forEach(function(btn){
   btn.addEventListener('click',function(){
