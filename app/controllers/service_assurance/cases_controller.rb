@@ -57,7 +57,8 @@ module ServiceAssurance
       @carrier_options = (FibrazoServiceAssurance::SettingsResolver.carrier_options | evaluated).first(200)
       assignee_ids = ServiceAssuranceCase.where.not(assignee_id: nil).distinct.pluck(:assignee_id)
       @evaluator_options = User.where(id: assignee_ids).order(:firstname).map do |u|
-        ["#{u.firstname} #{u.lastname} (#{u.login})".strip, u.id]
+        full = "#{u.firstname} #{u.lastname}".strip
+        [full.present? ? full : u.login, u.id]
       end
     end
 

@@ -32,5 +32,15 @@ module ServiceAssurance
       color = STATUS_COLORS[status.to_s] || '#333'
       "<span style=\"color:#{color};font-weight:600\">#{status}</span>".html_safe
     end
+
+    # Indisponibilidad legible: 73083 min (1218 h 03 min) o 3 días.
+    def sa_downtime_label(minutes)
+      m = minutes.to_i
+      return '—' if minutes.nil?
+      return "#{m} min" if m < 60
+      h = m / 60
+      return "#{m} min (#{h} h #{format('%02d', m % 60)})" if h < 48
+      "#{m} min (#{(h / 24.0).round(1)} días)"
+    end
   end
 end

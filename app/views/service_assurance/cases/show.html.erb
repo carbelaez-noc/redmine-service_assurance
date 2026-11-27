@@ -26,6 +26,8 @@
 .sa-line>div{background:#f4f6f9;border-radius:10px;padding:7px 14px;flex:1 1 150px;max-width:100%}
 .sa-line>div span{display:block;font-size:10px;color:#8a94a0;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:1px}
 .sa-line>div{font-size:13px;color:#111}
+.sa-topbar{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.sa-topbar .sa-flow{margin:0;padding:0;border:none}
 .sa-flow{margin-top:10px;padding-top:8px;border-top:1px solid #ddd;display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end}
 .sa-flow .sa-btn{font-size:12.5px;padding:4px 12px;border-radius:6px;border:1px solid #cfd4d9;background:#fff;cursor:pointer}
 .sa-flow .sa-btn.primary{background:#1f6feb;border-color:#1f6feb;color:#fff;font-weight:600}
@@ -57,17 +59,30 @@ dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 
   <div><span>Antigüedad</span><%= @sa_case.age_days ? "#{@sa_case.age_days} días" : '—' %></div>
 </div>
 
-<div class="sa-tabs">
+<% snap = @sa_case.original_snapshot || {} %>
+<%= form_for :evaluation, url: "/service_assurance/cases/#{@sa_case.id}", html: { method: :patch, id: 'sa-form', 'data-ticket-start' => snap.dig('inicio', 'raw').to_s, 'data-ticket-end' => snap.dig('fin', 'raw').to_s } do |f| %>
+<%= f.hidden_field :lock_version, value: @evaluation.lock_version, id: 'ev-lock' %>
+<% flow = (ServiceAssurance::CasesController::TRANSITION_FLOW[@sa_case.status] || []) %>
+<div class="sa-topbar">
 <div class="sa-tabbar">
 <button type="button" data-tab="panel-a" class="<%= @tab_states[:a] ? 'ok' : 'todo' %> active">A. Ticket</button>
 <button type="button" data-tab="panel-b" class="<%= @tab_states[:b] ? 'ok' : 'todo' %>">B. Evaluación y contractual</button>
 <% if %w[por_conciliar conciliado].include?(@sa_case.status) %><button type="button" data-tab="panel-d" class="<%= @tab_states[:d] ? 'ok' : 'todo' %>">C. Conciliación</button><% end %>
 </div>
+<div class="sa-flow">
+<input type="hidden" name="transition" id="sa-transition" value="save">
+<% if flow.include?('save') %><button type="submit" class="sa-btn primary" data-t="save">Guardar avance</button><% end %>
+<% if flow.include?('to_conciliate') && @can_conciliate %><button type="submit" class="sa-btn" data-t="to_conciliate">Enviar a conciliación</button><% end %>
+<% if flow.include?('discard') %><button type="button" class="sa-btn danger" id="btn-discard">No aplica</button><% end %>
+<% if flow.include?('close_accepted') && @can_conciliate %><button type="button" class="sa-btn" id="btn-accept">Cerrar: reconocida</button><% end %>
+<% if flow.include?('close_rejected') && @can_conciliate %><button type="button" class="sa-btn danger" id="btn-reject">Cerrar: rechazada</button><% end %>
+<span id="sa-saved"></span>
+</div>
+</div>
 
 <section class="sa-panel active" id="panel-a">
 <h3>A. Información original del ticket</h3>
   <p><strong>Asunto:</strong> <%= @issue.subject %></p>
-  <% snap = @sa_case.original_snapshot || {} %>
   <% if snap.any? %>
   <% line = { 'ciudad' => 'Ciudad', 'inicio' => 'Inicio de falla', 'fin' => 'Fin de falla', 'clientes' => 'Clientes afectados', 'motivo_apertura' => 'Motivo de apertura', 'carrier' => 'Carrier', 'caso_isp' => '# Caso ISP', 'id_externo' => 'ID externo', 'categoria' => 'Categoría de cierre', 'subcategoria' => 'Subcategoría de cierre', 'motivo' => 'Motivo de cierre' } %>
   <div class="sa-line">
@@ -86,8 +101,6 @@ dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 
   <% end %>
 </section>
 
-<%= form_for :evaluation, url: "/service_assurance/cases/#{@sa_case.id}", html: { method: :patch, id: 'sa-form', 'data-ticket-start' => snap.dig('inicio', 'raw').to_s, 'data-ticket-end' => snap.dig('fin', 'raw').to_s } do |f| %>
-<%= f.hidden_field :lock_version, value: @evaluation.lock_version, id: 'ev-lock' %>
 <section class="sa-panel" id="panel-b">
 <h3>B. Evaluación y datos contractuales</h3>
 <div class="sa-calc">A objetar: <strong id="calc-contract">—</strong> (<strong id="calc-contract-h">—</strong>) · Clientes: <strong><%= @evaluation.affected_customers || '—' %></strong></div>
@@ -127,16 +140,6 @@ dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 
 <% end %>
 
 <% flow = (ServiceAssurance::CasesController::TRANSITION_FLOW[@sa_case.status] || []) %>
-<div class="sa-flow">
-<input type="hidden" name="transition" id="sa-transition" value="save">
-<% if flow.include?('save') %><button type="submit" class="sa-btn primary" data-t="save">Guardar avance</button><% end %>
-<% if flow.include?('to_conciliate') && @can_conciliate %><button type="submit" class="sa-btn" data-t="to_conciliate">Enviar a conciliación</button><% end %>
-<% if flow.include?('discard') %><button type="button" class="sa-btn danger" id="btn-discard">No aplica</button><% end %>
-<% if flow.include?('close_accepted') && @can_conciliate %><button type="button" class="sa-btn" id="btn-accept">Cerrar: reconocida</button><% end %>
-<% if flow.include?('close_rejected') && @can_conciliate %><button type="button" class="sa-btn danger" id="btn-reject">Cerrar: rechazada</button><% end %>
-<span id="sa-saved"></span>
-</div>
-<% end %>
 <% if @sa_case.final? %>
 <div class="sa-flow">
   <span>Caso finalizado: <strong><%= @evaluation.result.presence || @sa_case.status %></strong></span>
@@ -144,6 +147,7 @@ dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 
     <%= form_tag("/service_assurance/cases/#{@sa_case.id}/reopen", method: :post, style: 'display:inline') do %><%= submit_tag 'Reabrir', class: 'sa-btn' %><% end %>
   <% end %>
 </div>
+<% end %>
 <% end %>
 
 <dialog id="dlg-accept" class="sa-dlg">
@@ -283,11 +287,13 @@ document.getElementById('dlg-dis-cancel').addEventListener('click',function(){dl
 document.getElementById('dlg-dis-ok').addEventListener('click',function(){
   var mo=document.getElementById('dlg-dis-motivo').value;
   if(!mo.trim()){alert('Indique el motivo');return;}
-  var notes=document.querySelector('[name="evaluation[conciliation_notes]"]');
-  if(notes)notes.value=mo;
+  var form=document.getElementById('sa-form');
+  var notes=form.querySelector('[name="evaluation[conciliation_notes]"]');
+  if(!notes){notes=document.createElement('textarea');notes.name='evaluation[conciliation_notes]';notes.style.display='none';form.appendChild(notes);}
+  notes.value=mo;
   dlgD.close();
   document.getElementById('sa-transition').value='discard';
-  document.getElementById('sa-form').submit();
+  form.submit();
 });
 document.getElementById('dlg-acc-ok').addEventListener('click',function(){
   var d=document.getElementById('dlg-acc-date').value,m=document.getElementById('dlg-acc-min').value;
