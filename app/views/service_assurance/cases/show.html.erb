@@ -112,12 +112,12 @@ dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 
   <div><label>Clientes afectados</label><%= f.number_field :affected_customers, value: @evaluation.affected_customers %></div>
   <div><label>¿Aplica ANS?</label><%= f.select :ans_applies, [['—', ''], ['Sí', true], ['No', false]], selected: @evaluation.ans_applies.nil? ? '' : @evaluation.ans_applies %></div>
   <div><label>Fecha reporte carrier</label><%= f.date_field :reported_on, value: @evaluation.reported_on %></div>
+  <div><label>Indisponibilidad (min)</label><%= f.number_field :downtime_minutes, value: @evaluation.downtime_minutes, id: 'ev-downtime', readonly: true %></div>
+  <div><label>&nbsp;</label><button type="button" class="sa-mini" id="pull-both" title="Traer inicio y fin de falla del ticket">↙ Traer fechas del ticket</button></div>
   <div><label>Inicio a objetar</label>
     <%= f.datetime_field :contract_start_at, value: @evaluation.contract_start_at, id: 'ev-contract-start' %></div>
   <div><label>Fin a objetar</label>
     <%= f.datetime_field :contract_end_at, value: @evaluation.contract_end_at, id: 'ev-contract-end' %></div>
-  <div><label>Indisponibilidad (min)</label><%= f.number_field :downtime_minutes, value: @evaluation.downtime_minutes, id: 'ev-downtime', readonly: true %></div>
-  <div><label>&nbsp;</label><button type="button" class="sa-mini" id="pull-both" title="Traer inicio y fin de falla del ticket">↙ Traer fechas del ticket</button></div>
   <div class="full"><label>Observaciones</label><%= f.text_area :observations, value: @evaluation.observations, rows: 4 %></div>
 </div>
 <p class="sa-hint">* El escalamiento es obligatorio para avanzar. Las fechas no aceptan futuro ni anteriores al inicio de la falla.</p>
