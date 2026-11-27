@@ -33,8 +33,8 @@ module FibrazoServiceAssurance
           nb_id = c['id']
           next if nb_id.nil?
           seen << nb_id
-          rec = ServiceAssuranceNetboxCircuit.find_or_initialize_by(nb_id: nb_id)
-          rec.assign_attributes(
+          # Solo se escribe si hay cambios reales (sin churn de updated_at).
+          data = {
             provider_id: c.dig('provider', 'id'),
             provider_name: c.dig('provider', 'name'),
             cid_original: c['cid'].to_s,
@@ -46,10 +46,20 @@ module FibrazoServiceAssurance
             endpoints_json: {}.to_json,
             url: c['display_url'] || c['url'],
             nb_updated_at: c['last_updated'],
-            synced_at: Time.zone.now,
             in_inventory: true
-          )
-          rec.save!
+          }
+          rec = ServiceAssuranceNetboxCircuit.find_or_initialize_by(nb_id: nb_id)
+          norm = lambda { |k, v|
+            v = Time.zone.parse(v.to_s).utc.to_s if k == :nb_updated_at && v.to_s.present?
+            v.to_s
+          }
+          current = data.keys.index_with { |k| norm.call(k, rec.send(k)) }
+          fresh = data.keys.index_with { |k| norm.call(k, data[k]) }
+          if rec.new_record? || current != fresh
+            rec.assign_attributes(data)
+            rec.synced_at = Time.zone.now
+            rec.save!
+          end
           synced += 1
         end
         # Retirados: solo si la descarga fue completa; nunca ante parciales.

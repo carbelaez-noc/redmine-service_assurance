@@ -352,11 +352,12 @@ module ServiceAssurance
     # Exporta los casos del periodo en formato de entrega al carrier (XLSX).
     def netbox_token
       return render_403 unless User.current.admin?
-      if FibrazoServiceAssurance::NetboxTokenStore.save(params[:token].to_s)
-        flash[:notice] = 'Token NetBox guardado cifrado'
-      else
-        flash[:error] = 'Token vacío: sin cambios'
+      ok = FibrazoServiceAssurance::NetboxTokenStore.save(params[:token].to_s)
+      if request.xhr?
+        render json: { ok: ok, message: ok ? 'Token actualizado y cifrado' : 'Token vacío: sin cambios' }
+        return
       end
+      flash[ok ? :notice : :error] = ok ? 'Token NetBox guardado cifrado' : 'Token vacío: sin cambios'
       redirect_to '/service_assurance/admin'
     end
 

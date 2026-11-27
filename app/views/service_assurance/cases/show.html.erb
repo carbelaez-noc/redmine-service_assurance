@@ -96,6 +96,31 @@ dialog.sa-dlg .sa-err{display:none;color:#a94442;background:#fdeeee;border:1px s
 <section class="sa-panel active" id="panel-a">
 <h3>A. Información original del ticket</h3>
   <p><strong>Asunto:</strong> <%= @issue.subject %></p>
+  <% hist_ids = %w[categoria subcategoria motivo motivo_apertura carrier caso_isp].flat_map { |k| [(FibrazoServiceAssurance::PreloadMap.field_for(k)&.id), Setting.plugin_fibrazo_service_assurance["cf_#{k}"].to_i.presence] }.compact.uniq %>
+  <% hist_cfs = {} %>
+  <% @issue.journals.each do |j| %>
+    <% j.details.each do |d| %>
+      <% if d.prop_key.to_s =~ /\A\d+\z/ && hist_ids.include?(d.prop_key.to_i) && (cf = CustomField.find_by_id(d.prop_key.to_i)) %>
+        <% hist_cfs[cf.id] = cf.name %>
+      <% end %>
+    <% end %>
+  <% end %>
+  <% hist_rows = [] %>
+  <% @issue.journals.each do |j| %>
+    <% j.details.each do |d| %>
+      <% if d.prop_key == 'status_id' %>
+        <% hist_rows << [j.created_on, (j.user ? j.user.login : '?'), 'Estado', (IssueStatus.find_by_id(d.old_value)&.name || d.old_value).to_s, (IssueStatus.find_by_id(d.value)&.name || d.value).to_s] %>
+      <% elsif d.prop_key.to_s =~ /\A\d+\z/ && hist_cfs[d.prop_key.to_i] %>
+        <% hist_rows << [j.created_on, (j.user ? j.user.login : '?'), hist_cfs[d.prop_key.to_i], d.old_value.to_s, d.value.to_s] %>
+      <% end %>
+    <% end %>
+  <% end %>
+  <% if hist_rows.any? %>
+  <details class="sa-hist"><summary>Historia de tipificación del caso (<%= hist_rows.size %> cambios, clic para ver)</summary>
+  <table class="list"><thead><tr><th>Fecha</th><th>Usuario</th><th>Campo</th><th>Antes</th><th>Después</th></tr></thead>
+  <tbody><% hist_rows.last(25).each do |r| %><tr><td><%= r[0]&.strftime('%Y-%m-%d %H:%M') %></td><td><%= h(r[1]) %></td><td><%= h(r[2]) %></td><td><%= h(r[3].to_s[0, 80]) %></td><td><%= h(r[4].to_s[0, 80]) %></td></tr><% end %></tbody></table>
+  </details>
+  <% end %>
   <% if snap.any? %>
   <% line = { 'ciudad' => 'Ciudad', 'inicio' => 'Inicio de falla', 'fin' => 'Fin de falla', 'clientes' => 'Clientes afectados', 'motivo_apertura' => 'Motivo de apertura', 'carrier' => 'Carrier', 'caso_isp' => '# Caso ISP', 'id_externo' => 'ID externo', 'categoria' => 'Categoría de cierre', 'subcategoria' => 'Subcategoría de cierre', 'motivo' => 'Motivo de cierre' } %>
   <div class="sa-line">
