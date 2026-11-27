@@ -46,14 +46,122 @@
 <% end %>
 </fieldset>
 <fieldset><legend>Acceso al módulo (vacío = por permisos de proyecto; con selección = solo ellos + admins)</legend>
-<p>
-  <label>Usuarios con acceso a Service Assurance</label><br/>
-  <%= select_tag 'settings[allowed_user_ids][]',
-      options_from_collection_for_select(User.active.order(:firstname, :lastname).limit(500), :id, ->(u) { "#{u.firstname} #{u.lastname} (#{u.login})".strip }, Array(@settings['allowed_user_ids']).map(&:to_i)),
-      multiple: true, size: 10 %>
-  <em>Solo los seleccionados (más administradores) pueden ver y operar el módulo. Vacío = rige el sistema de permisos por proyecto/rol.</em>
-</p>
+<p class="sa-roster-mode">Modo efectivo: <strong id="sa-roster-mode">—</strong></p>
+<div class="sa-duo">
+  <div class="sa-duo-col">
+    <label>Disponibles (<span id="sa-av-n">0</span>)</label>
+    <input type="search" id="sa-av-q" placeholder="Buscar nombre, apellido o login…" autocomplete="off">
+    <select id="sa-av" multiple size="10" aria-label="Usuarios disponibles"></select>
+    <em>Doble clic o Enter agrega. Sin Ctrl ni Shift.</em>
+  </div>
+  <div class="sa-duo-btns">
+    <button type="button" id="sa-add" title="Agregar seleccionados">›</button>
+    <button type="button" id="sa-del" title="Retirar seleccionados">‹</button>
+  </div>
+  <div class="sa-duo-col">
+    <label>Autorizados (<span id="sa-au-n">0</span>)</label>
+    <div id="sa-au" class="sa-au-list" role="listbox" aria-label="Usuarios autorizados" tabindex="0"></div>
+    <em>Doble clic devuelve. × retira uno.</em>
+  </div>
+</div>
+<select name="settings[allowed_user_ids][]" id="sa-hidden" multiple style="display:none"></select>
+<p class="sa-roster-warn" id="sa-empty-warn" style="display:none">La lista quedó vacía: al guardar, el acceso volverá a permisos por proyecto y rol.<br>
+<label><input type="checkbox" id="sa-empty-ok"> Entiendo y confirmo guardar la lista vacía</label></p>
+<p><em>Solo los autorizados (más administradores) pueden ver y operar el módulo. Vacío = rige el sistema de permisos por proyecto/rol.</em></p>
 </fieldset>
+<style>
+.sa-duo{display:flex;gap:8px;align-items:stretch;margin:6px 0}
+.sa-duo-col{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.sa-duo-col label{font-weight:bold}
+.sa-duo-col select,.sa-au-list{border:1px solid #cfd4d9;border-radius:6px;min-height:180px;max-height:220px;overflow-y:auto;background:#fff}
+.sa-duo-col select{width:100%}
+.sa-duo-col input[type=search]{width:100%;box-sizing:border-box;border:1px solid #cfd4d9;border-radius:6px;padding:4px 8px}
+.sa-duo-btns{display:flex;flex-direction:column;justify-content:center;gap:6px}
+.sa-duo-btns button{font-size:16px;padding:4px 12px;border-radius:6px;border:1px solid #cfd4d9;background:#fff;cursor:pointer}
+.sa-duo-btns button:hover{background:#eef4ff}
+.sa-au-item{display:flex;justify-content:space-between;align-items:center;padding:4px 8px;border-bottom:1px dotted #e5e5e5;font-size:12.5px;cursor:default}
+.sa-au-item.sel{background:#eef4ff}
+.sa-au-item button{border:none;background:none;color:#a94442;cursor:pointer;font-size:14px;line-height:1}
+.sa-roster-mode{margin:2px 0 6px}
+.sa-roster-warn{color:#7a3b00;background:#fdf3e3;border:1px solid #f0c36d;border-radius:6px;padding:8px 12px}
+@media (max-width:700px){.sa-duo{flex-direction:column}.sa-duo-btns{flex-direction:row;justify-content:center}}
+</style>
+<script>
+(function(){
+var USERS = <%= raw User.active.order(:firstname, :lastname).limit(500).map { |u| { id: u.id, name: "#{u.firstname} #{u.lastname}".strip.presence || u.login, login: u.login } }.to_json %>;
+var SEL = <%= raw Array(@settings['allowed_user_ids']).map(&:to_i).reject(&:zero?).to_json %>;
+var state = { sel: SEL.filter(function(id,i){return SEL.indexOf(id)===i;}) };
+function byId(id){return USERS.filter(function(u){return u.id===id;})[0];}
+function norm(s){return (s||'').toLowerCase();}
+function available(q){
+  q = norm(q);
+  return USERS.filter(function(u){
+    if(state.sel.indexOf(u.id)>=0)return false;
+    if(!q)return true;
+    return norm(u.name).indexOf(q)>=0 || norm(u.login).indexOf(q)>=0;
+  });
+}
+function addIds(ids){
+  ids.forEach(function(id){if(byId(id)&&state.sel.indexOf(id)<0)state.sel.push(id);});
+}
+function delIds(ids){
+  state.sel = state.sel.filter(function(id){return ids.indexOf(id)<0;});
+}
+function saRosterState(){return {sel:state.sel.slice()};}
+function render(){
+  var av=document.getElementById('sa-av'),q=document.getElementById('sa-av-q').value;
+  var list=available(q),keep={};
+  for(var i=0;i<av.options.length;i++){if(av.options[i].selected)keep[av.options[i].value]=1;}
+  av.innerHTML='';
+  list.forEach(function(u){
+    var o=document.createElement('option');o.value=u.id;o.textContent=u.name+' ('+u.login+')';
+    if(keep[u.id])o.selected=true;av.appendChild(o);
+  });
+  document.getElementById('sa-av-n').textContent=list.length;
+  var au=document.getElementById('sa-au');au.innerHTML='';
+  state.sel.forEach(function(id){
+    var u=byId(id);if(!u)return;
+    var d=document.createElement('div');d.className='sa-au-item';d.setAttribute('data-id',id);d.setAttribute('role','option');
+    var s=document.createElement('span');s.textContent=u.name+' ('+u.login+')';d.appendChild(s);
+    var x=document.createElement('button');x.type='button';x.textContent='×';x.title='Retirar';
+    x.setAttribute('data-x',id);d.appendChild(x);au.appendChild(d);
+  });
+  document.getElementById('sa-au-n').textContent=state.sel.length;
+  var h=document.getElementById('sa-hidden');h.innerHTML='';
+  state.sel.forEach(function(id){var o=document.createElement('option');o.value=id;o.selected=true;h.appendChild(o);});
+  var empty=state.sel.length===0;
+  document.getElementById('sa-roster-mode').textContent=empty?'permisos por proyecto y rol':'nómina ('+state.sel.length+' autorizados)';
+  document.getElementById('sa-empty-warn').style.display=empty?'block':'none';
+  if(!empty)document.getElementById('sa-empty-ok').checked=false;
+}
+function selectedVals(el){var r=[];for(var i=0;i<el.options.length;i++){if(el.options[i].selected)r.push(parseInt(el.options[i].value,10));}return r;}
+function selectedAuth(){var r=[];var au=document.getElementById('sa-au');for(var i=0;i<au.children.length;i++){if(au.children[i].classList.contains('sel'))r.push(parseInt(au.children[i].getAttribute('data-id'),10));}return r;}
+document.getElementById('sa-av-q').addEventListener('input',render);
+document.getElementById('sa-add').addEventListener('click',function(){addIds(selectedVals(document.getElementById('sa-av')));render();});
+document.getElementById('sa-del').addEventListener('click',function(){delIds(selectedAuth());render();});
+document.getElementById('sa-av').addEventListener('dblclick',function(e){if(e.target&&e.target.value){addIds([parseInt(e.target.value,10)]);render();}});
+document.getElementById('sa-av').addEventListener('keydown',function(e){if(e.key==='Enter'){addIds(selectedVals(e.target));render();e.preventDefault();}});
+document.getElementById('sa-au').addEventListener('dblclick',function(e){var it=e.target.closest?e.target.closest('.sa-au-item'):null;if(it){delIds([parseInt(it.getAttribute('data-id'),10)]);render();}});
+document.getElementById('sa-au').addEventListener('click',function(e){
+  if(e.target&&e.target.getAttribute&&e.target.getAttribute('data-x')){delIds([parseInt(e.target.getAttribute('data-x'),10)]);render();return;}
+  var it=e.target.closest?e.target.closest('.sa-au-item'):null;
+  if(it)it.classList.toggle('sel');
+});
+document.getElementById('sa-au').addEventListener('keydown',function(e){
+  if(e.key==='Delete'||e.key==='Backspace'){delIds(selectedAuth());render();}
+});
+var form=document.querySelector('form[action*="fibrazo_service_assurance"]')||document.getElementById('sa-hidden').closest('form');
+if(form)form.addEventListener('submit',function(e){
+  if(state.sel.length===0&&!document.getElementById('sa-empty-ok').checked){
+    e.preventDefault();
+    document.getElementById('sa-empty-warn').style.display='block';
+    document.getElementById('sa-empty-warn').scrollIntoView();
+  }
+});
+render();
+if(typeof module!=='undefined'){module.exports={available:available,addIds:addIds,delIds:delIds,saRosterState:saRosterState};}
+})();
+</script>
 <p>
   <label>Carriers seleccionables (uno por línea)</label><br/>
   <%= text_area_tag 'settings[carrier_list]', @settings['carrier_list'], rows: 4, cols: 40 %>
