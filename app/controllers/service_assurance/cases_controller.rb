@@ -147,6 +147,7 @@ module ServiceAssurance
         if transition == 'close_accepted'
           return update_fail('Cierre requiere fecha de reporte / envío') if @evaluation.reported_on.blank?
           return update_fail('Cierre requiere tiempo reconocido') if @evaluation.acknowledged_minutes.nil?
+          return update_fail('Cierre requiere motivo / observaciones de la conciliación') if @evaluation.conciliation_notes.to_s.strip.empty?
         end
         if transition == 'close_rejected' && @evaluation.conciliation_notes.to_s.strip.empty?
           return update_fail('Cierre rechazado requiere motivo')

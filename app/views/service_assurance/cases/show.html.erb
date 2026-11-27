@@ -157,6 +157,7 @@ dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 
   <p class="sa-hint">Fecha y tiempo obligatorios: quedan registrados en el cierre.</p>
   <label>Fecha reporte / envío *</label><input type="date" id="dlg-acc-date" required>
   <label>Tiempo reconocido (min) *</label><input type="number" id="dlg-acc-min" required>
+  <label>Motivo / observaciones de la conciliación *</label><textarea id="dlg-acc-motivo" rows="3" required></textarea>
   <menu>
     <button type="button" id="dlg-acc-ok" class="sa-btn primary">Confirmar cierre</button>
     <button type="button" id="dlg-acc-cancel" class="sa-btn">Cancelar</button>
@@ -356,12 +357,17 @@ document.getElementById('dlg-dis-ok').addEventListener('click',function(){
   form.submit();
 });
 document.getElementById('dlg-acc-ok').addEventListener('click',function(){
-  var d=document.getElementById('dlg-acc-date').value,m=document.getElementById('dlg-acc-min').value;
+  var d=document.getElementById('dlg-acc-date').value,m=document.getElementById('dlg-acc-min').value,mo=document.getElementById('dlg-acc-motivo').value;
   if(!d){alert('Indique la fecha de reporte / envío');return;}
   if(m===''){alert('Indique el tiempo reconocido');return;}
-  var rep=document.querySelector('[name="evaluation[reported_on]"]'),ack=document.getElementById('ev-ack');
+  if(!mo.trim()){alert('Indique el motivo / observaciones de la conciliación');return;}
+  var form=document.getElementById('sa-form');
+  var rep=form.querySelector('[name="evaluation[reported_on]"]'),ack=document.getElementById('ev-ack');
   if(rep&&d)rep.value=d;
   if(ack&&m!=='')ack.value=m;
+  var notes=form.querySelector('[name="evaluation[conciliation_notes]"]');
+  if(!notes){notes=document.createElement('textarea');notes.name='evaluation[conciliation_notes]';notes.style.display='none';form.appendChild(notes);}
+  notes.value=mo;
   dlgA.close();
   document.getElementById('sa-transition').value='close_accepted';
   document.getElementById('sa-form').submit();
