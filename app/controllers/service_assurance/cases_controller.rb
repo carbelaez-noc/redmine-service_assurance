@@ -168,7 +168,11 @@ module ServiceAssurance
         changed << ['assignee', nil, User.current.login]
       end
       # Sin número de escalamiento ni ID de servicio no se avanza (guardar sí permite).
-      if transition.present? && transition != 'save' && transition != 'discard'
+      # Conciliación exige B completa y devuelve TODOS los faltantes de una vez.
+      if transition == 'to_conciliate'
+        missing = evaluation_missing(@evaluation)
+        return update_fail("Faltan campos para enviar a conciliación: #{missing.join(', ')}") if missing.any?
+      elsif transition.present? && transition != 'save' && transition != 'discard'
         if @evaluation.external_case.to_s.strip.empty?
           return update_fail('Requiere número de escalamiento al carrier para avanzar')
         end
@@ -221,6 +225,20 @@ module ServiceAssurance
       end
       flash.now[:error] = message
       render_show
+    end
+
+    # Campos obligatorios de B para poder enviar a conciliación.
+    def evaluation_missing(ev)
+      missing = []
+      missing << 'Proveedor' if ev.provider.to_s.strip.empty?
+      missing << 'Número de escalamiento carrier' if ev.external_case.to_s.strip.empty?
+      missing << 'ID del servicio' if ev.service_id.to_s.strip.empty?
+      missing << 'Clientes afectados' if ev.affected_customers.nil?
+      missing << '¿Aplica ANS?' if ev.ans_applies.nil?
+      missing << 'Fecha de reporte / envío' if ev.reported_on.blank?
+      missing << 'Inicio a objetar' if ev.contract_start_at.blank?
+      missing << 'Fin a objetar' if ev.contract_end_at.blank?
+      missing
     end
 
     def conciliate

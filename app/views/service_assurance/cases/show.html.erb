@@ -193,6 +193,12 @@ dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 
 </table>
 </section>
 </div>
+<dialog id="dlg-warn" class="sa-dlg">
+  <h3>Campos pendientes</h3>
+  <p>Para enviar a conciliación diligencie:</p>
+  <ul id="dlg-warn-list" style="margin:6px 0 12px 18px"></ul>
+  <menu style="text-align:right"><button type="button" class="sa-btn primary" id="dlg-warn-ok">Revisar</button></menu>
+</dialog>
 <script>
 function saMin(a,b){if(!a||!b)return null;var ms=new Date(b)-new Date(a);if(isNaN(ms)||ms<=0)return null;return Math.round(ms/60000);}
 function saHuman(m){if(m==null)return '—';var h=Math.floor(m/60);return h>0?h+'h '+(m%60)+'m ('+m+' min)':m+' min';}
@@ -263,8 +269,50 @@ function saLimits(){
     if(el){if(t0)el.min=t0;el.max=now;}
   });
 }
+function saWarn(items){
+  var dlg=document.getElementById('dlg-warn'),ul=document.getElementById('dlg-warn-list');
+  ul.innerHTML='';
+  items.forEach(function(t){var li=document.createElement('li');li.textContent=t;ul.appendChild(li);});
+  if(dlg.showModal)dlg.showModal();else alert(items.join('\n'));
+}
+document.getElementById('dlg-warn-ok').addEventListener('click',function(){document.getElementById('dlg-warn').close();});
+// Pre-chequeo flotante antes de enviar a conciliación (el servidor valida de nuevo).
+function saMissingB(){
+  var need=[['evaluation_provider','Proveedor'],['evaluation_external_case','Número de escalamiento carrier'],['evaluation_service_id','ID del servicio'],['evaluation_affected_customers','Clientes afectados'],['evaluation_ans_applies','¿Aplica ANS?'],['evaluation_reported_on','Fecha de reporte / envío'],['ev-contract-start','Inicio a objetar'],['ev-contract-end','Fin a objetar']];
+  var miss=[];
+  need.forEach(function(p){
+    var el=document.getElementById(p[0]);
+    if(!el||!String(el.value||'').trim())miss.push(p[1]);
+  });
+  return miss;
+}
+var btnConc=document.querySelector('.sa-flow button[data-t="to_conciliate"]');
+if(btnConc)btnConc.addEventListener('click',function(e){
+  var miss=saMissingB();
+  if(miss.length){e.preventDefault();e.stopPropagation();saWarn(miss);}
+},true);
+// Transiciones por fetch: éxito recarga, error muestra advertencia flotante.
 document.querySelectorAll('.sa-flow button[data-t]').forEach(function(b){
-  b.addEventListener('click',function(){document.getElementById('sa-transition').value=b.getAttribute('data-t');});
+  b.addEventListener('click',function(e){
+    e.preventDefault();
+    var t=b.getAttribute('data-t');
+    if(t==='to_conciliate'&&saMissingB().length)return; // ya avisado por el pre-chequeo
+    var form=document.getElementById('sa-form');
+    var fd=new FormData(form);fd.set('transition',t);
+    var badge=document.getElementById('sa-saved');
+    badge.textContent='Enviando…';
+    fetch(form.action,{method:'PATCH',body:fd,credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest','X-CSRF-Token':(document.querySelector('meta[name=csrf-token]')||{}).content||''}})
+    .then(function(r){return r.json().then(function(j){return {st:r.status,j:j};});})
+    .then(function(o){
+      if(o.j.ok){location.reload();}
+      else{
+        var msg=o.j.error||'no guardado';
+        badge.textContent='Error: '+msg;
+        if(msg.indexOf('Faltan campos')===0){var parts=(msg.split(':')[1]||'');var items=parts.split(',').map(function(s){return s.trim();}).filter(Boolean);saWarn(items.length?items:[msg]);}
+        else{alert(msg);}
+      }
+    }).catch(function(){badge.textContent='Sin conexión';});
+  });
 });
 var dlgA=document.getElementById('dlg-accept'),dlgR=document.getElementById('dlg-reject'),dlgD=document.getElementById('dlg-discard');
 var btnA=document.getElementById('btn-accept'),btnR=document.getElementById('btn-reject'),btnD=document.getElementById('btn-discard');
