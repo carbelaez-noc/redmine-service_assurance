@@ -13,9 +13,7 @@ module FibrazoServiceAssurance
     end
 
     def self.token
-      path = settings['netbox_token_path'].to_s.strip
-      return nil if path.empty? || !File.readable?(path)
-      File.read(path).strip.presence
+      NetboxTokenStore.read
     end
 
     def self.run(manual: false)

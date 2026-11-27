@@ -204,7 +204,10 @@ module ServiceAssurance
       ActiveRecord::Base.transaction do
         @evaluation.save!
         @sa_case.save!
-        reconcile_circuits!(params[:circuit_links], changed) if params.key?(:circuit_links) && !@sa_case.final?
+        if !@sa_case.final?
+          rec_by_ix = reconcile_circuits!(params[:circuit_links], changed)
+          save_circuit_intervals!(params[:circuit_intervals], rec_by_ix, changed) if params.key?(:circuit_intervals)
+        end
         changed.each { |f, o, n| ServiceAssuranceAudit.log(@sa_case.id, User.current.id, 'update', f, [o, n]) }
       end
       if request.xhr?
@@ -228,7 +231,8 @@ module ServiceAssurance
       raw = links.respond_to?(:to_unsafe_h) ? links.to_unsafe_h : links
       incoming = Array(raw.is_a?(Hash) ? raw.values : raw)
       keep_ids = []
-      incoming.each do |l|
+      rec_by_ix = {}
+      incoming.each_with_index do |l, ix|
         h = l.respond_to?(:to_unsafe_h) ? l.to_unsafe_h : l.to_h
         nb_id = h['nb_id'].to_s.strip.presence&.to_i
         manual = h['manual_cid'].to_s.strip
@@ -258,10 +262,35 @@ module ServiceAssurance
           changed << ['circuit_add', nil, attrs[:circuit]]
         end
         keep_ids << rec.id
+        rec_by_ix[ix.to_s] = rec.id
       end
       removed = @sa_case.circuits.where.not(id: keep_ids)
       removed.each { |r| changed << ['circuit_del', r.circuit, nil] }
       removed.destroy_all
+      rec_by_ix
+    end
+
+    # Intervalos propios por circuito (tiempos que difieren del general).
+    # Solo toca intervalos ligados a circuitos; los generales se preservan.
+    def save_circuit_intervals!(raw_intervals, rec_by_ix, changed)
+      hash = raw_intervals.respond_to?(:to_unsafe_h) ? raw_intervals.to_unsafe_h : raw_intervals
+      hash = {} unless hash.is_a?(Hash)
+      errors = []
+      touched = []
+      hash.each do |ix, rows_raw|
+        rec_id = rec_by_ix[ix.to_s]
+        next if rec_id.nil?
+        rows = parse_rows(rows_raw, %w[kind start_at end_at note], errors)
+        return update_fail(errors.first) if errors.any?
+        link = @sa_case.circuits.find(rec_id)
+        link.intervals.destroy_all
+        rows.each do |r|
+          link.intervals.create!(case_id: @sa_case.id, kind: r['kind'], start_at: r['start_at'], end_at: r['end_at'], note: r['note'])
+        end
+        touched << link.id
+        changed << ['circuit_times', link.carrier_ref, "#{rows.size} intervalo(s)"] if rows.any?
+      end
+      # Circuitos sin filas enviadas conservan sus intervalos (no se asume nada).
     end
 
     class CircuitError < StandardError; end
@@ -321,6 +350,16 @@ module ServiceAssurance
     end
 
     # Exporta los casos del periodo en formato de entrega al carrier (XLSX).
+    def netbox_token
+      return render_403 unless User.current.admin?
+      if FibrazoServiceAssurance::NetboxTokenStore.save(params[:token].to_s)
+        flash[:notice] = 'Token NetBox guardado cifrado'
+      else
+        flash[:error] = 'Token vacío: sin cambios'
+      end
+      redirect_to '/service_assurance/admin'
+    end
+
     def export
       unless allowed?(:view_service_assurance)
         return render_403

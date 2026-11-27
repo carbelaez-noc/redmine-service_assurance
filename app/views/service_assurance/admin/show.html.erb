@@ -8,3 +8,13 @@
   <p><strong>Casos registrados:</strong> <%= @case_count %> (<%= @by_status.map { |k, v| "#{k}: #{v}" }.join(' · ') %>)</p>
 </div>
 <p><%= link_to 'Ajustes del plugin', '/settings/plugin/fibrazo_service_assurance' %></p>
+<div class="box">
+  <h3>Token NetBox (cifrado, nunca visible)</h3>
+  <p>Estado: <strong><%= FibrazoServiceAssurance::NetboxTokenStore.configured? ? 'configurado' : 'ausente' %></strong></p>
+  <%= form_tag '/service_assurance/cases/netbox_token', method: :post do %>
+    <p><label>Nuevo token</label><br>
+    <%= password_field_tag 'token', '', size: 50, autocomplete: 'new-password' %></p>
+    <p><%= submit_tag 'Guardar token cifrado' %>
+    <em>Pegar el token lo cifra (AES-256-GCM) y guarda solo el cifrado. Nunca se muestra ni se registra.</em></p>
+  <% end %>
+</div>

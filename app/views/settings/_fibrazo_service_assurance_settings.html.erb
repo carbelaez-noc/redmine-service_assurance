@@ -51,16 +51,15 @@
   <%= text_field_tag 'settings[netbox_base_url]', @settings['netbox_base_url'].presence || 'https://nb.fibrazo.com.co', size: 40 %>
 </p>
 <p>
-  <label>Ruta del token (archivo local 600, nunca en el formulario)</label>
-  <%= text_field_tag 'settings[netbox_token_path]', @settings['netbox_token_path'], size: 40 %><br>
-  <em>El token vive en un archivo del servidor, no en la base de datos.</em>
+  <label>Token</label>
+  <%= FibrazoServiceAssurance::NetboxTokenStore.configured? ? 'configurado (cifrado, nunca visible)' : 'ausente — configúrelo en Administración → Service Assurance' %>
 </p>
 <p>
   <label>Última sincronización</label>
   <%= @settings['netbox_last_sync_at'].presence || '—' %> ·
   <%= h(@settings['netbox_last_result'].to_s) %> ·
   <%= @settings['netbox_last_count'].to_s %> circuitos en caché
-  <%= button_to 'Sincronizar ahora', '/service_assurance/cases/netbox_sync', method: :post, class: 'sa-btn', form: { style: 'display:inline' } %>
+  <%= link_to 'Sincronizar ahora', '/service_assurance/cases/netbox_sync', method: :post, class: 'sa-btn' %>
 </p>
 </fieldset>
 <fieldset class="sa-roster"><legend>Acceso al módulo (vacío = por permisos de proyecto; con selección = solo ellos + admins)</legend>
