@@ -47,6 +47,17 @@ dialog.sa-dlg label{display:block;font-size:11px;color:#5b6570;font-weight:bold;
 dialog.sa-dlg input,dialog.sa-dlg textarea{width:100%;box-sizing:border-box;border:1px solid #cfd4d9;border-radius:6px;padding:5px 8px;font-size:13px}
 dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 0;margin:0}
 dialog.sa-dlg .sa-err{display:none;color:#a94442;background:#fdeeee;border:1px solid #f3b8b8;border-radius:6px;padding:6px 10px;margin:8px 0 0}
+.sa-nb input[type=search]{width:100%;box-sizing:border-box;border:1px solid #cfd4d9;border-radius:6px;padding:5px 8px}
+.sa-nb-results{display:flex;flex-direction:column;gap:4px;margin:6px 0;max-height:190px;overflow-y:auto}
+.sa-nb-row{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#f7f9fb;border-radius:8px;padding:6px 10px;font-size:12.5px}
+.sa-nb-row small{color:#5b6570}
+.sa-nb-chips{display:flex;flex-direction:column;gap:4px;margin:6px 0}
+.sa-nb-chip{display:flex;gap:6px;align-items:center;background:#eef6ee;border:1px solid #bfe0bf;border-radius:8px;padding:6px 10px;font-size:12.5px;flex-wrap:wrap}
+.sa-nb-chip span{flex:1 1 200px}
+.sa-nb-chip input[type=text]{border:1px solid #cfd4d9;border-radius:6px;padding:3px 6px;font-size:12px;width:170px}
+.sa-nb-chip button{border:none;background:none;color:#a94442;cursor:pointer;font-size:15px}
+.sa-nb-manual{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.sa-nb-manual input{flex:1 1 180px;border:1px solid #cfd4d9;border-radius:6px;padding:4px 8px}
 .sa-subnav{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
 .sa-subnav a{display:inline-block;padding:4px 12px;border:1px solid #cfd4d9;border-radius:6px;background:#fff;text-decoration:none;font-size:12.5px;color:#1f6feb;font-weight:600}
 .sa-subnav a:hover{background:#eef4ff;text-decoration:none}
@@ -121,6 +132,31 @@ dialog.sa-dlg .sa-err{display:none;color:#a94442;background:#fdeeee;border:1px s
   <div><label>Fin a objetar</label>
     <%= f.datetime_field :contract_end_at, value: @evaluation.contract_end_at, id: 'ev-contract-end' %></div>
   <div class="full"><label>Observaciones</label><%= f.text_area :observations, value: @evaluation.observations, rows: 4 %></div>
+  <div class="full"><label>Circuitos / servicios asociados (Capacidad registrada en NetBox, no comercial confirmada)</label>
+    <div class="sa-nb">
+      <input type="search" id="sa-nb-q" placeholder="Buscar por CID, componente, descripción o ruta…" autocomplete="off">
+      <div id="sa-nb-results" class="sa-nb-results"></div>
+      <div id="sa-nb-chips" class="sa-nb-chips">
+        <% @sa_case.circuits.each_with_index do |lc, ix| %>
+          <div class="sa-nb-chip" data-ix="<%= ix %>">
+            <span><strong><%= h(lc.carrier_ref.presence || lc.circuit) %></strong> · <%= h(lc.source == 'netbox' ? (JSON.parse(lc.snapshot_json || '{}')['capacity'] rescue 'NetBox') : 'manual — pendiente de validación') %><% if lc.source == 'netbox' && (u = (JSON.parse(lc.snapshot_json || '{}')['url'] rescue nil)) %> · <a target="_blank" href="<%= h(u) %>">NetBox</a><% end %></span>
+            <input type="text" name="circuit_links[<%= ix %>][carrier_ref]" value="<%= h(lc.carrier_ref.to_s) %>" title="Identificador usado ante el carrier">
+            <input type="text" name="circuit_links[<%= ix %>][note]" value="<%= h(lc.note.to_s) %>" placeholder="nota / justificación">
+            <button type="button" data-unlink="<%= ix %>" title="Retirar">×</button>
+            <input type="hidden" name="circuit_links[<%= ix %>][link_id]" value="<%= lc.id %>">
+            <input type="hidden" name="circuit_links[<%= ix %>][nb_id]" value="<%= lc.nb_circuit_id %>">
+            <input type="hidden" name="circuit_links[<%= ix %>][manual_cid]" value="<%= lc.source == 'manual' ? h(lc.circuit) : '' %>">
+          </div>
+        <% end %>
+      </div>
+      <div class="sa-nb-manual">
+        <input type="text" id="sa-nb-manual-cid" placeholder="Referencia manual (si no existe en NetBox)">
+        <input type="text" id="sa-nb-manual-note" placeholder="Justificación obligatoria">
+        <button type="button" class="sa-btn" id="sa-nb-manual-add">Agregar manual</button>
+      </div>
+      <em>CID NetBox original · referencia usada ante el carrier · escalamiento del incidente son tres datos distintos. Buscar no modifica nada; guardar asocia.</em>
+    </div>
+  </div>
 </div>
 <p class="sa-hint">* El escalamiento es obligatorio para avanzar. Las fechas no aceptan futuro ni anteriores al inicio de la falla.</p>
 </section>
@@ -309,7 +345,65 @@ if(btnConc)btnConc.addEventListener('click',function(e){
   var miss=saMissingB();
   if(miss.length){e.preventDefault();e.stopPropagation();saWarn(miss);}
 },true);
-// Transiciones por fetch: éxito recarga, error muestra advertencia flotante.
+// Circuitos NetBox (caché local, solo lectura). Buscar no modifica; guardar asocia.
+var saNbIx = document.querySelectorAll('#sa-nb-chips .sa-nb-chip').length;
+function saNbEscape(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function saNbLinked(){
+  var ids={};
+  document.querySelectorAll('#sa-nb-chips input[name$="[nb_id]"]').forEach(function(h){if(h.value)ids['nb'+h.value]=1;});
+  document.querySelectorAll('#sa-nb-chips input[name$="[manual_cid]"]').forEach(function(h){if(h.value)ids['m'+h.value.toLowerCase()]=1;});
+  return ids;
+}
+function saNbAddChip(d){
+  var linked=saNbLinked();
+  if(d.nb_id&&linked['nb'+d.nb_id])return;
+  if(d.manual_cid&&linked['m'+d.manual_cid.toLowerCase()])return;
+  var ix=saNbIx++;
+  var div=document.createElement('div');div.className='sa-nb-chip';
+  div.innerHTML='<span><strong>'+saNbEscape(d.label)+'</strong> · '+saNbEscape(d.sub)+(d.url?' · <a target="_blank" href="'+saNbEscape(d.url)+'">NetBox</a>':'')+'</span>'
+    +'<input type="text" name="circuit_links['+ix+'][carrier_ref]" value="'+saNbEscape(d.ref||'')+'" title="Identificador usado ante el carrier">'
+    +'<input type="text" name="circuit_links['+ix+'][note]" value="" placeholder="nota / justificación">'
+    +'<button type="button" title="Retirar">×</button>'
+    +'<input type="hidden" name="circuit_links['+ix+'][nb_id]" value="'+(d.nb_id||'')+'">'
+    +'<input type="hidden" name="circuit_links['+ix+'][manual_cid]" value="'+saNbEscape(d.manual_cid||'')+'">';
+  div.querySelector('button').addEventListener('click',function(){div.remove();});
+  document.getElementById('sa-nb-chips').appendChild(div);
+}
+document.querySelectorAll('#sa-nb-chips .sa-nb-chip button[data-unlink]').forEach(function(b){
+  b.addEventListener('click',function(){b.closest('.sa-nb-chip').remove();});
+});
+var saNbTimer=null;
+var saNbQ=document.getElementById('sa-nb-q');
+if(saNbQ){saNbQ.addEventListener('input',function(){
+  clearTimeout(saNbTimer);
+  saNbTimer=setTimeout(function(){
+    var prov=(document.getElementById('evaluation_provider')||{}).value||'';
+    var box=document.getElementById('sa-nb-results');
+    var url='/service_assurance/cases/netbox_search?q='+encodeURIComponent(saNbQ.value)+'&provider='+encodeURIComponent(prov);
+    fetch(url,{credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest'}})
+    .then(function(r){return r.json();})
+    .then(function(j){
+      box.innerHTML='';
+      (j.rows||[]).forEach(function(r){
+        var d=document.createElement('div');d.className='sa-nb-row';
+        d.innerHTML='<span><strong>'+saNbEscape(r.cid)+'</strong> <small>'+saNbEscape(r.provider)+' · '+saNbEscape(r.capacity)+' · '+saNbEscape(r.type||'')+' · '+saNbEscape(r.status||'')+'<br>'+saNbEscape(r.description)+'</small></span>';
+        var b=document.createElement('button');b.type='button';b.className='sa-btn';b.textContent='Asociar';
+        b.addEventListener('click',function(){saNbAddChip({nb_id:r.nb_id,label:r.cid,sub:r.provider+' · '+r.capacity,url:r.url,ref:r.cid});});
+        d.appendChild(b);box.appendChild(d);
+      });
+      if(!(j.rows||[]).length)box.innerHTML='<small>Sin coincidencias en caché.</small>';
+    }).catch(function(){box.innerHTML='<small>Sin conexión con la caché.</small>';});
+  },300);
+});}
+var saNbManual=document.getElementById('sa-nb-manual-add');
+if(saNbManual){saNbManual.addEventListener('click',function(){
+  var cid=document.getElementById('sa-nb-manual-cid').value.trim();
+  var note=document.getElementById('sa-nb-manual-note').value.trim();
+  if(!cid||!note){saWarn(['Referencia manual requiere CID y justificación'],'Referencia manual','Complete ambos campos:');return;}
+  saNbAddChip({manual_cid:cid,label:cid,sub:'manual — pendiente de validación',ref:cid});
+  document.getElementById('sa-nb-manual-cid').value='';document.getElementById('sa-nb-manual-note').value='';
+});}
+// Envío de modales por fetch: éxito recarga, error muestra advertencia flotante
 document.querySelectorAll('.sa-flow button[data-t]').forEach(function(b){
   b.addEventListener('click',function(e){
     e.preventDefault();

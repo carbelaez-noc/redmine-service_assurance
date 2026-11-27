@@ -22,7 +22,12 @@ Redmine::Plugin.register :fibrazo_service_assurance do
     'cf_carrier' => '', 'cf_caso_isp' => '', 'cf_categoria' => '',
     'cf_subcategoria' => '', 'cf_motivo' => '', 'cf_motivo_apertura' => '', 'cf_id_externo' => '',
     'carrier_list' => '',
-    'allowed_user_ids' => []
+    'allowed_user_ids' => [],
+    'netbox_base_url' => 'https://nb.fibrazo.com.co',
+    'netbox_token_path' => '',
+    'netbox_last_sync_at' => '',
+    'netbox_last_result' => 'sin sincronizar',
+    'netbox_last_count' => '0'
   }, partial: 'settings/fibrazo_service_assurance_settings'
 
   project_module :service_assurance do
