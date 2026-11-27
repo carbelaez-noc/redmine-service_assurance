@@ -107,6 +107,7 @@ dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 
 <div class="sa-grid">
   <div><label>Proveedor (inventario carrier)</label><%= f.select :provider, [['— seleccionar —', '']] + @carriers.map { |c| [c, c] }, selected: @evaluation.provider %></div>
   <div><label>Número de escalamiento carrier *</label><%= f.text_field :external_case, value: @evaluation.external_case, required: true %></div>
+  <div><label>ID del servicio *</label><%= f.text_field :service_id, value: @evaluation.service_id, required: true %></div>
   <div><label>Tipo de afectación</label><%= f.select :impact_type, [['— seleccionar —', '']] + (['Falla total', 'Degradación', 'Intermitencia', 'Sin afectación'] | [@evaluation.impact_type.to_s]).reject(&:empty?).map { |v| [v, v] }, selected: @evaluation.impact_type %></div>
   <div><label>Clientes afectados</label><%= f.number_field :affected_customers, value: @evaluation.affected_customers %></div>
   <div><label>¿Aplica ANS?</label><%= f.select :ans_applies, [['—', ''], ['Sí', true], ['No', false]], selected: @evaluation.ans_applies.nil? ? '' : @evaluation.ans_applies %></div>
@@ -330,7 +331,7 @@ if(saAuditT){saAuditT.addEventListener('click',function(e){
 document.querySelectorAll('.sa-tabbar button').forEach(function(btn){
   btn.addEventListener('click',function(){
     document.querySelectorAll('.sa-tabbar button').forEach(function(b){b.classList.remove('active');});
-    document.querySelectorAll('.sa-tabs .sa-panel').forEach(function(p){p.classList.remove('active');});
+    document.querySelectorAll('.sa-panel').forEach(function(p){p.classList.remove('active');});
     btn.classList.add('active');
     document.getElementById(btn.getAttribute('data-tab')).classList.add('active');
   });

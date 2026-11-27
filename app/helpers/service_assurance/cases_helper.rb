@@ -20,6 +20,15 @@ module ServiceAssurance
       '—'
     end
 
+    def full_evaluator(sa_case)
+      u = sa_case.assignee
+      return '' if u.nil?
+      full = "#{u.firstname} #{u.lastname}".strip
+      full.present? ? full : u.login.to_s
+    rescue StandardError
+      ''
+    end
+
     STATUS_COLORS = {
       'pendiente' => '#8a6d00',
       'en_revision' => '#1f6feb',

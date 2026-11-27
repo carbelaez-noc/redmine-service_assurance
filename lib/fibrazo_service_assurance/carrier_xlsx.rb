@@ -7,11 +7,13 @@ module FibrazoServiceAssurance
   # Una hoja, strings inline, estilos propios. Formato de entrega al carrier.
   class CarrierXlsx
     HEADERS = [
-      'Caso SA', 'Ticket', 'Folio', 'Asunto', 'Cierre ticket', 'Proveedor', 'Circuito(s)',
-      'Caso externo', 'Inicio real', 'Fin real', 'Minutos indisponibilidad',
-      'Clientes afectados', 'Tipo afectación', 'ANS aplica', 'Conciliación aplica',
-      'Tiempos reconocidos (min)', 'Diferencia (min)', 'Resultado',
-      'Crédito solicitado', 'Crédito reconocido', 'Estado SA', 'Evaluador'
+      'Ticket', 'Folio', 'Asunto', 'Cierre ticket', 'Fecha creado', 'Proveedor',
+      'ID servicio', '# caso carrier', 'Tipo afectación', 'Inicio falla',
+      'Fin falla', 'Inicio a objetar', 'Fin a objetar',
+      'Minutos indisponibilidad', 'Clientes afectados', 'ANS aplica',
+      'Conciliación aplica', 'Tiempos reconocidos (min)', 'Diferencia (min)',
+      'Resultado', 'Crédito solicitado', 'Crédito reconocido', 'Motivo cierre ticket',
+      'Motivo cierre SA', 'Estado SA', 'Evaluador'
     ].freeze
 
     def self.build(rows)

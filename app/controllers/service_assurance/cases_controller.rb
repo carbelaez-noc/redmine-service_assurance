@@ -167,10 +167,14 @@ module ServiceAssurance
         @sa_case.assignee_id = User.current.id
         changed << ['assignee', nil, User.current.login]
       end
-      # Sin número de escalamiento no se avanza (guardar sí permite).
-      if transition.present? && transition != 'save' && transition != 'discard' &&
-         @evaluation.external_case.to_s.strip.empty?
-        return update_fail('Requiere número de escalamiento al carrier para avanzar')
+      # Sin número de escalamiento ni ID de servicio no se avanza (guardar sí permite).
+      if transition.present? && transition != 'save' && transition != 'discard'
+        if @evaluation.external_case.to_s.strip.empty?
+          return update_fail('Requiere número de escalamiento al carrier para avanzar')
+        end
+        if @evaluation.service_id.to_s.strip.empty?
+          return update_fail('Requiere ID del servicio para avanzar')
+        end
       end
       if @evaluation.real_start_at && @evaluation.real_end_at && @evaluation.real_end_at <= @evaluation.real_start_at
         return update_fail('Fin real debe ser posterior al inicio real')
@@ -243,17 +247,21 @@ module ServiceAssurance
       rows = cases.order(:id).limit(2000).map do |sa|
         ev = sa.evaluation
         issue = sa.issue
-        circuits = sa.circuits.any? ? sa.circuits.map(&:circuit).join('; ') : ev&.circuit.to_s
+        snap = sa.original_snapshot || {}
         fmt = ->(v) { v.respond_to?(:strftime) ? v.strftime('%Y-%m-%d %H:%M') : v.to_s }
-        [sa.id, issue&.id, issue_folio(issue), issue&.subject, fmt.call(issue&.closed_on), ev&.provider,
-         circuits, ev&.external_case, fmt.call(ev&.real_start_at), fmt.call(ev&.real_end_at),
-         ev&.downtime_minutes, ev&.affected_customers, ev&.impact_type,
+        [issue&.id, issue_folio(issue), issue&.subject, fmt.call(issue&.closed_on),
+         fmt.call(sa.created_at), ev&.provider, ev&.service_id,
+         ev&.external_case, ev&.impact_type, fmt.call(snap.dig('inicio', 'raw')),
+         fmt.call(snap.dig('fin', 'raw')), fmt.call(ev&.contract_start_at), fmt.call(ev&.contract_end_at),
+         ev&.downtime_minutes, ev&.affected_customers,
          ev&.ans_applies.nil? ? '' : (ev.ans_applies ? 'Sí' : 'No'),
          ev&.conciliation_applies.nil? ? '' : (ev.conciliation_applies ? 'Sí' : 'No'),
          ev&.acknowledged_minutes, ev&.difference_minutes, ev&.result,
-         ev&.credit_requested, ev&.credit_granted, sa.status, sa.assignee&.login]
+         ev&.credit_requested, ev&.credit_granted,
+         snap.dig('motivo', 'raw').to_s, ev&.conciliation_notes.to_s,
+         sa.status, full_evaluator(sa)]
       end
-      rows.select! { |r| r[4].to_s.downcase.include?(carrier.downcase) } if carrier.present?
+      rows.select! { |r| r[5].to_s.downcase.include?(carrier.downcase) } if carrier.present?
       data = FibrazoServiceAssurance::CarrierXlsx.build(rows)
       send_data data, filename: "service_assurance_#{Date.today.strftime('%Y%m%d')}.xlsx",
                       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -368,7 +376,7 @@ module ServiceAssurance
       # sent_on/external_verified: retirados del formulario (una sola fecha; sin verificación por ahora).
       params.require(:evaluation).permit(
         :lock_version,
-        :provider, :external_case, :impact_type,
+        :provider, :external_case, :service_id, :impact_type,
         :real_start_at, :real_end_at, :affected_customers, :observations,
         :ans_applies, :reported_on, :contract_start_at, :contract_end_at,
         :exclusions,
