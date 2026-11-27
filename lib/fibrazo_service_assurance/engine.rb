@@ -15,16 +15,20 @@ module FibrazoServiceAssurance
 
     # Rellena SOLO claves ausentes con los defaults del plugin.
     # Nunca sobrescribe valores existentes (nómina, CF, carriers, token).
-    initializer 'fibrazo_service_assurance.ensure_settings_defaults', after: :load_config_initializers do
+    # En to_prepare: corre tras el registro de plugins (el initializer temprano no los ve).
+    config.to_prepare do
       begin
-        plugin = Redmine::Plugin.all.detect { |x| x.id == :fibrazo_service_assurance }
-        defaults = plugin && plugin.settings && plugin.settings[:default] || {}
-        stored = Setting.plugin_fibrazo_service_assurance
-        missing = defaults.keys.map(&:to_s) - stored.keys.map(&:to_s)
-        unless missing.empty?
-          merged = stored.stringify_keys.merge(defaults.stringify_keys.slice(*missing))
-          Setting.plugin_fibrazo_service_assurance = merged
-          Rails.logger.info("ServiceAssurance: defaults aplicados a #{missing.inspect}")
+        unless defined?($sa_settings_defaults_done) && $sa_settings_defaults_done
+          plugin = Redmine::Plugin.all.detect { |x| x.id == :fibrazo_service_assurance }
+          defaults = plugin && plugin.settings && plugin.settings[:default] || {}
+          stored = Setting.plugin_fibrazo_service_assurance
+          missing = defaults.keys.map(&:to_s) - stored.keys.map(&:to_s)
+          unless missing.empty?
+            merged = stored.stringify_keys.merge(defaults.stringify_keys.slice(*missing))
+            Setting.plugin_fibrazo_service_assurance = merged
+            Rails.logger.info("ServiceAssurance: defaults aplicados a #{missing.inspect}")
+          end
+          $sa_settings_defaults_done = true
         end
       rescue StandardError => e
         Rails.logger.warn("ServiceAssurance: no se aplicaron defaults (#{e.message})")
