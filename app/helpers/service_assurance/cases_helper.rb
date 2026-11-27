@@ -10,7 +10,19 @@ module ServiceAssurance
       "##{issue.id}"
     end
 
-    # Nombre y apellido del evaluador (nunca solo el login).
+    # Estado de reclamación: solo sent_on + claim_due_on, nunca compensación.
+    def sa_claim_status(ev)
+      return 'sin_reclamar' if ev.nil? || ev.sent_on.blank?
+      return 'reclamado' if ev.claim_due_on.blank?
+      Date.today > ev.claim_due_on ? 'vencido' : 'reclamado'
+    end
+
+    # Saldo pendiente = reclamado − recibido. Por evaluación (caso),
+    # nunca por circuito: un incidente multicircuito no duplica importes.
+    def sa_compensation_balance(ev)
+      return nil if ev.nil? || ev.credit_requested.nil?
+      ev.credit_requested - (ev.compensation_received || 0)
+    end
     def assignee_name(sa_case)
       u = sa_case.assignee
       return '—' if u.nil?

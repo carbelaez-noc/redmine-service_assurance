@@ -15,6 +15,9 @@ RedmineApp::Application.routes.draw do
     post '/cases/:id/conciliate', to: 'service_assurance/cases#conciliate', constraints: { id: /\d+/ }
     post '/cases/:id/reopen', to: 'service_assurance/cases#reopen', constraints: { id: /\d+/ }
     get '/admin', to: 'service_assurance/admin#show'
+    post '/admin/ans_targets', to: 'service_assurance/admin#ans_target_create'
+    post '/admin/ans_targets/:id/retire', to: 'service_assurance/admin#ans_target_retire'
+    post '/admin/monthly_validate', to: 'service_assurance/admin#monthly_validate'
   end
   namespace :service_assurance do
     namespace :api do

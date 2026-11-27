@@ -1,4 +1,5 @@
 <h2>Service Assurance — Administración</h2>
+<style>.sa-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;max-width:100%}.sa-grid label{display:block;font-weight:bold}.sa-grid input,.sa-grid select{max-width:100%;box-sizing:border-box}</style>
 <div class="box">
   <p><strong>Campo de activación:</strong> <%= @activation_field ? "#{@activation_field.name} (##{@activation_field.id}, #{@activation_field.field_format})" : 'NO RESUELTO — configúrelo en los ajustes del plugin' %></p>
   <p><strong>Valor afirmativo normalizado:</strong> <%= @yes_values.join(' / ') %></p>
@@ -8,6 +9,50 @@
   <p><strong>Casos registrados:</strong> <%= @case_count %> (<%= @by_status.map { |k, v| "#{k}: #{v}" }.join(' · ') %>)</p>
 </div>
 <p><%= link_to 'Ajustes del plugin', '/settings/plugin/fibrazo_service_assurance' %></p>
+<div class="box">
+  <h3>Objetivos ANS por servicio (lo no registrado figura pendiente, sin objetivo por defecto)</h3>
+  <% if @ans_targets.any? %>
+  <table class="list"><thead><tr><th>Circuito</th><th>Proveedor</th><th>Tipo</th><th>Objetivo %</th><th>Vigencia</th><th>Ref. contractual</th><th>Estado</th><th></th></tr></thead>
+  <tbody><% @ans_targets.each do |t| %><tr>
+    <td><%= t.nb_circuit_id || h(t.manual_ref) %></td><td><%= h(t.provider) %></td><td><%= h(t.service_type) %></td>
+    <td><%= t.objetivo %></td><td><%= t.vigencia_ini %> – <%= t.vigencia_fin || 'abierta' %></td>
+    <td><%= h(t.ref_contractual) %></td><td><%= t.estado %></td>
+    <td><% if t.estado != 'retirada' %><%= button_to 'Retirar', "/service_assurance/admin/ans_targets/#{t.id}/retire", method: :post %><% end %></td>
+  </tr><% end %></tbody></table>
+  <% else %><p>Sin objetivos registrados: todos los servicios figuran como <strong>pendiente</strong> y jamás se usan como objetivo.</p><% end %>
+  <%= form_tag '/service_assurance/admin/ans_targets', method: :post do %>
+  <div class="sa-grid">
+  <div><label>NetBox ID</label><input type="number" name="target[nb_circuit_id]" size="6"></div>
+  <div><label>Referencia manual</label><input type="text" name="target[manual_ref]" size="18" placeholder="ref. manual"></div>
+  <div><label>Proveedor</label><%= select_tag 'target[provider]', options_for_select(@carriers) %></div>
+  <div><label>Tipo</label><%= select_tag 'target[service_type]', options_for_select(['transporte', 'TIP', 'otro']) %></div>
+  <div><label>Objetivo %</label><input type="number" name="target[objetivo]" step="0.01" min="0" max="100" size="6"></div>
+  <div><label>Vigencia inicio</label><input type="date" name="target[vigencia_ini]"></div>
+  <div><label>Vigencia fin</label><input type="date" name="target[vigencia_fin]"></div>
+  <div><label>Ref. contractual</label><input type="text" name="target[ref_contractual]" size="20"></div>
+  <div><label>Estado</label><%= select_tag 'target[estado]', options_for_select([['pendiente', 'pendiente'], ['confirmada', 'confirmada']]) %></div>
+  <div><%= submit_tag 'Registrar objetivo' %></div>
+  </div>
+  <% end %>
+  <p><em>Vigencias confirmadas del mismo circuito no pueden superponerse. Para corregir: retirar y crear nuevo (la historia se preserva).</em></p>
+</div>
+<div class="box">
+  <h3>Validación mensual del comité (proveedor + periodo)</h3>
+  <% if @closures.any? %>
+  <table class="list"><thead><tr><th>Proveedor</th><th>Periodo</th><th>Validado</th><th>Foto</th><th>Estado</th></tr></thead>
+  <tbody><% @closures.each do |c| %><tr>
+    <td><%= h(c.provider) %></td><td><%= h(c.periodo) %></td>
+    <td><%= c.validated_at&.strftime('%Y-%m-%d %H:%M') %></td><td><%= h(c.result_snapshot_json.to_s[0, 90]) %></td>
+    <td><%= c.needs_review? ? 'requiere revisión' : 'vigente' %></td>
+  </tr><% end %></tbody></table>
+  <% end %>
+  <%= form_tag '/service_assurance/admin/monthly_validate', method: :post do %>
+  <p><label>Proveedor</label> <%= select_tag 'provider', options_for_select(@carriers) %>
+  <label>Periodo</label> <input type="month" name="periodo">
+  <label>Notas</label> <input type="text" name="notes" size="30">
+  <%= submit_tag 'Validar mes' %></p>
+  <% end %>
+</div>
 <div class="box">
   <h3>Token NetBox (cifrado, nunca visible)</h3>
   <p>Estado: <strong><%= FibrazoServiceAssurance::NetboxTokenStore.configured? ? 'configurado' : 'ausente' %></strong></p>

@@ -120,6 +120,16 @@ module ServiceAssurance
         changed << [k, old, v] if old.to_s != v.to_s
       end
       @evaluation.assign_attributes(attrs)
+      # Vencimiento de reclamación: 30 días contados desde el ÚLTIMO DÍA del mes
+      # del incidente (cláusula Liberty), solo si el evaluador lo deja vacío.
+      # Manual siempre gana y queda identificado como tal.
+      if @evaluation.claim_due_on.blank?
+        ref = @evaluation.contract_end_at || @evaluation.real_end_at
+        if ref
+          @evaluation.claim_due_on = (ref.to_date.end_of_month + 30.days).to_date
+          changed << ['claim_due_on', nil, "auto: último día del mes +30 (#{@evaluation.claim_due_on})"]
+        end
+      end
       transition = params[:transition].to_s
       if transition.present? && transition != 'save'
         unless TRANSITIONS.key?(transition)
@@ -205,9 +215,10 @@ module ServiceAssurance
         @evaluation.save!
         @sa_case.save!
         if !@sa_case.final?
-          rec_by_ix = reconcile_circuits!(params[:circuit_links], changed)
+          rec_by_ix = params.key?(:circuit_links) ? reconcile_circuits!(params[:circuit_links], changed) : {}
           save_circuit_intervals!(params[:circuit_intervals], rec_by_ix, changed) if params.key?(:circuit_intervals)
         end
+        flag_stale_closures!
         changed.each { |f, o, n| ServiceAssuranceAudit.log(@sa_case.id, User.current.id, 'update', f, [o, n]) }
       end
       if request.xhr?
@@ -296,6 +307,19 @@ module ServiceAssurance
     end
 
     class CircuitError < StandardError; end
+
+    # Si una evaluación ya validada por el comité cambia, marca revisión
+    # sin borrar el histórico (provider + periodo mensual como identificador).
+    def flag_stale_closures!
+      prov = @evaluation.provider.to_s.strip
+      ref = @evaluation.contract_end_at || @evaluation.real_end_at
+      return if prov.empty? || ref.nil?
+      periodo = ref.strftime('%Y-%m')
+      cl = ServiceAssuranceMonthlyClosure.find_by(provider: prov, periodo: periodo)
+      return if cl.nil? || cl.validated_at.nil? || cl.needs_review?
+      cl.update!(needs_review: true)
+      ServiceAssuranceAudit.log(@sa_case.id, User.current.id, 'monthly_review', periodo, ['validado', 'requiere revisión'])
+    end
 
     def update_fail(message)
       if request.xhr?
@@ -389,7 +413,11 @@ module ServiceAssurance
          ev&.ans_applies.nil? ? '' : (ev.ans_applies ? 'Sí' : 'No'),
          ev&.conciliation_applies.nil? ? '' : (ev.conciliation_applies ? 'Sí' : 'No'),
          ev&.acknowledged_minutes, ev&.difference_minutes, ev&.result,
-         ev&.credit_requested, ev&.credit_granted,
+         ev&.credit_requested, ev&.credit_granted, ev&.compensation_received,
+         (ev&.credit_requested.nil? ? '' : ev.credit_requested - (ev.compensation_received || 0)),
+         ev&.credit_note_ref, ev&.compensation_status,
+         fmt.call(ev&.reported_at), fmt.call(ev&.sent_on), fmt.call(ev&.claim_due_on),
+         (ev.nil? ? '' : (ev.sent_on.blank? ? 'sin_reclamar' : (ev.claim_due_on.present? && Date.today > ev.claim_due_on ? 'vencido' : 'reclamado'))),
          snap.dig('motivo', 'raw').to_s, ev&.conciliation_notes.to_s,
          sa.status, full_evaluator(sa)]
       end
@@ -401,11 +429,14 @@ module ServiceAssurance
         sa.circuits.each do |lc|
           snap = (JSON.parse(lc.snapshot_json || '{}') rescue {})
           times = lc.intervals.order(:start_at).to_a
+          tgt_date = (ev&.contract_end_at || ev&.real_end_at || Time.zone.now).to_date
+          tgt = ServiceAssuranceAnsTarget.for_circuit(lc.nb_circuit_id, lc.carrier_ref, tgt_date)
+          objetivo = tgt ? "#{tgt.objetivo}% (#{tgt.estado})" : 'pendiente'
           base = [issue&.id, issue_folio(issue), lc.carrier_ref.presence || lc.circuit,
                   lc.source == 'netbox' ? (snap['cid'] || lc.circuit) : lc.circuit,
                   snap['provider'] || ev&.provider,
                   snap['capacity'] || '—', lc.affected_capacity.presence || '—',
-                  lc.source == 'netbox' ? 'NetBox' : 'manual — pendiente de validación']
+                  lc.source == 'netbox' ? 'NetBox' : 'manual — pendiente de validación', objetivo]
           if times.any?
             times.each do |t|
               circuit_rows << (base + [t.kind, sa_fmt(t.start_at), sa_fmt(t.end_at), t.minutes, 'propios del circuito'])
@@ -534,15 +565,15 @@ module ServiceAssurance
 
     def evaluation_params
       # downtime/difference/conciliation/result: calculados o derivados en servidor, no editables.
-      # sent_on/external_verified: retirados del formulario (una sola fecha; sin verificación por ahora).
       params.require(:evaluation).permit(
         :lock_version,
         :provider, :external_case, :service_id, :impact_type,
         :real_start_at, :real_end_at, :affected_customers, :observations,
-        :ans_applies, :reported_on, :contract_start_at, :contract_end_at,
+        :ans_applies, :reported_on, :reported_at, :contract_start_at, :contract_end_at,
         :exclusions,
         :acknowledged_minutes, :conciliation_notes,
-        :credit_granted
+        :credit_requested, :credit_granted, :sent_on, :claim_due_on, :credit_note_ref,
+        :compensation_status, :compensation_received
       )
     end
   end

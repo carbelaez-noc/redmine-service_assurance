@@ -12,13 +12,15 @@ module FibrazoServiceAssurance
       'Fin falla', 'Inicio a objetar', 'Fin a objetar',
       'Minutos indisponibilidad', 'Clientes afectados', 'ANS aplica',
       'Conciliación aplica', 'Tiempos reconocidos (min)', 'Diferencia (min)',
-      'Resultado', 'Crédito solicitado', 'Crédito reconocido', 'Motivo cierre ticket',
+      'Resultado', 'Crédito solicitado', 'Crédito reconocido', 'Compensación recibida', 'Saldo pendiente',
+      'Ref. nota crédito', 'Estado compensación', 'Fecha-hora reporte', 'Fecha reclamación', 'Fecha límite reclamo',
+      'Estado reclamo', 'Motivo cierre ticket',
       'Motivo cierre SA', 'Estado SA', 'Evaluador'
     ].freeze
 
     CIRCUIT_HEADERS = [
       'Ticket', 'Folio', 'Circuito (ref carrier)', 'CID original', 'Proveedor',
-      'Capacidad registrada', 'Cap. afectada', 'Validación', 'Tipo afectación',
+      'Capacidad registrada', 'Cap. afectada', 'Validación', 'Objetivo ANS', 'Tipo afectación',
       'Inicio', 'Fin', 'Minutos', 'Fuente tiempos'
     ].freeze
 
