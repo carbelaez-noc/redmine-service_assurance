@@ -46,6 +46,7 @@ dialog.sa-dlg h3{margin:0 0 8px;font-size:15px}
 dialog.sa-dlg label{display:block;font-size:11px;color:#5b6570;font-weight:bold;text-transform:uppercase;letter-spacing:.03em;margin:8px 0 2px}
 dialog.sa-dlg input,dialog.sa-dlg textarea{width:100%;box-sizing:border-box;border:1px solid #cfd4d9;border-radius:6px;padding:5px 8px;font-size:13px}
 dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 0;margin:0}
+dialog.sa-dlg .sa-err{display:none;color:#a94442;background:#fdeeee;border:1px solid #f3b8b8;border-radius:6px;padding:6px 10px;margin:8px 0 0}
 .sa-subnav{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
 .sa-subnav a{display:inline-block;padding:4px 12px;border:1px solid #cfd4d9;border-radius:6px;background:#fff;text-decoration:none;font-size:12.5px;color:#1f6feb;font-weight:600}
 .sa-subnav a:hover{background:#eef4ff;text-decoration:none}
@@ -158,6 +159,7 @@ dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 
   <label>Fecha reporte / envío *</label><input type="date" id="dlg-acc-date" required>
   <label>Tiempo reconocido (min) *</label><input type="number" id="dlg-acc-min" required>
   <label>Motivo / observaciones de la conciliación *</label><textarea id="dlg-acc-motivo" rows="3" required></textarea>
+  <p class="sa-err" id="err-acc"></p>
   <menu>
     <button type="button" id="dlg-acc-ok" class="sa-btn primary">Confirmar cierre</button>
     <button type="button" id="dlg-acc-cancel" class="sa-btn">Cancelar</button>
@@ -168,6 +170,7 @@ dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 
   <p class="sa-hint">Motivo obligatorio. El tiempo solo si hubo reconocimiento parcial.</p>
   <label>Motivo del rechazo *</label><textarea id="dlg-rej-motivo" rows="3" required></textarea>
   <label>Tiempo reconocido (min, si aplica)</label><input type="number" id="dlg-rej-min">
+  <p class="sa-err" id="err-rej"></p>
   <menu>
     <button type="button" id="dlg-rej-ok" class="sa-btn primary">Confirmar cierre</button>
     <button type="button" id="dlg-rej-cancel" class="sa-btn">Cancelar</button>
@@ -177,6 +180,7 @@ dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 
   <h3>Marcar como no aplica</h3>
   <p class="sa-hint">Motivo obligatorio. Se limpia la decisión de ANS.</p>
   <label>Motivo *</label><textarea id="dlg-dis-motivo" rows="3" required></textarea>
+  <p class="sa-err" id="err-dis"></p>
   <menu>
     <button type="button" id="dlg-dis-ok" class="sa-btn primary">Confirmar</button>
     <button type="button" id="dlg-dis-cancel" class="sa-btn">Cancelar</button>
@@ -196,8 +200,8 @@ dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 
 </section>
 </div>
 <dialog id="dlg-warn" class="sa-dlg">
-  <h3>Campos pendientes</h3>
-  <p>Para enviar a conciliación diligencie:</p>
+  <h3 id="dlg-warn-title">Campos pendientes</h3>
+  <p id="dlg-warn-sub">Para enviar a conciliación diligencie:</p>
   <ul id="dlg-warn-list" style="margin:6px 0 12px 18px"></ul>
   <menu style="text-align:right"><button type="button" class="sa-btn primary" id="dlg-warn-ok">Revisar</button></menu>
 </dialog>
@@ -281,11 +285,13 @@ function saLimits(){
     if(el){if(t0)el.min=t0;el.max=now;}
   });
 }
-function saWarn(items){
+function saWarn(items,title,sub){
   var dlg=document.getElementById('dlg-warn'),ul=document.getElementById('dlg-warn-list');
   ul.innerHTML='';
   items.forEach(function(t){var li=document.createElement('li');li.textContent=t;ul.appendChild(li);});
-  if(dlg.showModal)dlg.showModal();else alert(items.join('\n'));
+  document.getElementById('dlg-warn-title').textContent=title||'Campos pendientes';
+  document.getElementById('dlg-warn-sub').textContent=sub||'Para enviar a conciliación diligencie:';
+  if(dlg.showModal)dlg.showModal();
 }
 document.getElementById('dlg-warn-ok').addEventListener('click',function(){document.getElementById('dlg-warn').close();});
 // Pre-chequeo flotante antes de enviar a conciliación (el servidor valida de nuevo).
@@ -321,7 +327,7 @@ document.querySelectorAll('.sa-flow button[data-t]').forEach(function(b){
         var msg=o.j.error||'no guardado';
         badge.textContent='Error: '+msg;
         if(msg.indexOf('Faltan campos')===0){var parts=(msg.split(':')[1]||'');var items=parts.split(',').map(function(s){return s.trim();}).filter(Boolean);saWarn(items.length?items:[msg]);}
-        else{alert(msg);}
+        else{saWarn([msg],'No se pudo completar','Revise y reintente:');}
       }
     }).catch(function(){badge.textContent='Sin conexión';});
   });
@@ -345,42 +351,41 @@ if(btnD){btnD.addEventListener('click',function(){
   dlgD.showModal();
 });}
 document.getElementById('dlg-dis-cancel').addEventListener('click',function(){dlgD.close();});
+// Envío de modales por fetch: sin recargas ni diálogos del navegador.
+function saErr(id,msg){var e=document.getElementById(id);if(e){e.textContent=msg||'';e.style.display=msg?'block':'none';}}
+function saModalPost(transition,extra,dlg,errId){
+  var form=document.getElementById('sa-form');
+  var fd=new FormData(form);fd.set('transition',transition);
+  for(var k in extra){fd.set('evaluation['+k+']',extra[k]);}
+  var badge=document.getElementById('sa-saved');
+  badge.textContent='Enviando…';
+  fetch(form.action,{method:'PATCH',body:fd,credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest','X-CSRF-Token':(document.querySelector('meta[name=csrf-token]')||{}).content||''}})
+  .then(function(r){return r.json().then(function(j){return {st:r.status,j:j};});})
+  .then(function(o){
+    if(o.j.ok){dlg.close();location.reload();}
+    else{var msg=o.j.error||'no guardado';badge.textContent='Error: '+msg;saErr(errId,msg);}
+  }).catch(function(){saErr(errId,'Sin conexión: no guardado');});
+}
 document.getElementById('dlg-dis-ok').addEventListener('click',function(){
   var mo=document.getElementById('dlg-dis-motivo').value;
-  if(!mo.trim()){alert('Indique el motivo');return;}
-  var form=document.getElementById('sa-form');
-  var notes=form.querySelector('[name="evaluation[conciliation_notes]"]');
-  if(!notes){notes=document.createElement('textarea');notes.name='evaluation[conciliation_notes]';notes.style.display='none';form.appendChild(notes);}
-  notes.value=mo;
-  dlgD.close();
-  document.getElementById('sa-transition').value='discard';
-  form.submit();
+  if(!mo.trim()){saErr('err-dis','Indique el motivo');return;}
+  saErr('err-dis','');
+  saModalPost('discard',{conciliation_notes:mo},dlgD,'err-dis');
 });
 document.getElementById('dlg-acc-ok').addEventListener('click',function(){
   var d=document.getElementById('dlg-acc-date').value,m=document.getElementById('dlg-acc-min').value,mo=document.getElementById('dlg-acc-motivo').value;
-  if(!d){alert('Indique la fecha de reporte / envío');return;}
-  if(m===''){alert('Indique el tiempo reconocido');return;}
-  if(!mo.trim()){alert('Indique el motivo / observaciones de la conciliación');return;}
-  var form=document.getElementById('sa-form');
-  var rep=form.querySelector('[name="evaluation[reported_on]"]'),ack=document.getElementById('ev-ack');
-  if(rep&&d)rep.value=d;
-  if(ack&&m!=='')ack.value=m;
-  var notes=form.querySelector('[name="evaluation[conciliation_notes]"]');
-  if(!notes){notes=document.createElement('textarea');notes.name='evaluation[conciliation_notes]';notes.style.display='none';form.appendChild(notes);}
-  notes.value=mo;
-  dlgA.close();
-  document.getElementById('sa-transition').value='close_accepted';
-  document.getElementById('sa-form').submit();
+  if(!d){saErr('err-acc','Indique la fecha de reporte / envío');return;}
+  if(m===''){saErr('err-acc','Indique el tiempo reconocido');return;}
+  if(!mo.trim()){saErr('err-acc','Indique el motivo / observaciones de la conciliación');return;}
+  saErr('err-acc','');
+  saModalPost('close_accepted',{reported_on:d,acknowledged_minutes:m,conciliation_notes:mo},dlgA,'err-acc');
 });
 document.getElementById('dlg-rej-ok').addEventListener('click',function(){
   var mo=document.getElementById('dlg-rej-motivo').value,m=document.getElementById('dlg-rej-min').value;
-  if(!mo.trim()){alert('Indique el motivo del rechazo');return;}
-  var notes=document.querySelector('[name="evaluation[conciliation_notes]"]'),ack=document.getElementById('ev-ack');
-  if(notes)notes.value=mo;
-  if(ack&&m!=='')ack.value=m;
-  dlgR.close();
-  document.getElementById('sa-transition').value='close_rejected';
-  document.getElementById('sa-form').submit();
+  if(!mo.trim()){saErr('err-rej','Indique el motivo del rechazo');return;}
+  saErr('err-rej','');
+  var extra={conciliation_notes:mo};if(m!=='')extra.acknowledged_minutes=m;
+  saModalPost('close_rejected',extra,dlgR,'err-rej');
 });
 saCalc();
 saLimits();

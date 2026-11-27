@@ -252,7 +252,7 @@ module ServiceAssurance
     # Exporta los casos del periodo en formato de entrega al carrier (XLSX).
     def export
       unless allowed?(:view_service_assurance)
-        render_403 and return
+        return render_403
       end
       from = params[:sa_from].to_s.strip
       to = params[:sa_to].to_s.strip
@@ -288,7 +288,7 @@ module ServiceAssurance
 
     def reopen
       unless allowed?(:reopen_service_assurance)
-        render_403 and return
+        return render_403
       end
       @sa_case.update!(status: 'en_revision')
       ServiceAssuranceAudit.log(@sa_case.id, User.current.id, 'reopen', 'status', nil)
@@ -361,7 +361,7 @@ module ServiceAssurance
       end
     rescue FibrazoServiceAssurance::Eligibility::OutOfScopeError => e
       flash[:error] = "Fuera de alcance: #{e.message}"
-      redirect_to service_assurance_path and return
+      return redirect_to(service_assurance_path)
     end
 
     def authorize_view
