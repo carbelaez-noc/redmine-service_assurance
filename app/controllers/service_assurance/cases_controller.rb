@@ -127,8 +127,12 @@ module ServiceAssurance
         ref = @evaluation.contract_end_at || @evaluation.real_end_at
         if ref
           @evaluation.claim_due_on = (ref.to_date.end_of_month + 30.days).to_date
+          @evaluation.claim_due_source = 'auto'
           changed << ['claim_due_on', nil, "auto: último día del mes +30 (#{@evaluation.claim_due_on})"]
         end
+      elsif @evaluation.claim_due_source.blank?
+        # Fecha puesta a mano sin fuente declarada: manual (referencia, no contractual).
+        @evaluation.claim_due_source = 'manual'
       end
       transition = params[:transition].to_s
       if transition.present? && transition != 'save'
@@ -414,10 +418,11 @@ module ServiceAssurance
          ev&.conciliation_applies.nil? ? '' : (ev.conciliation_applies ? 'Sí' : 'No'),
          ev&.acknowledged_minutes, ev&.difference_minutes, ev&.result,
          ev&.credit_requested, ev&.credit_granted, ev&.compensation_received,
-         (ev&.credit_requested.nil? ? '' : ev.credit_requested - (ev.compensation_received || 0)),
+         (ev.nil? || ev.credit_granted.nil? ? 'pendiente de conciliación' : (((p = ev.credit_granted - (ev.compensation_received || 0))).negative? ? 'revisar' : p)),
+         (ev.nil? || ev.credit_requested.nil? || ev.credit_granted.nil? ? '' : ev.credit_requested - ev.credit_granted),
          ev&.credit_note_ref, ev&.compensation_status,
-         fmt.call(ev&.reported_at), fmt.call(ev&.sent_on), fmt.call(ev&.claim_due_on),
-         (ev.nil? ? '' : (ev.sent_on.blank? ? 'sin_reclamar' : (ev.claim_due_on.present? && Date.today > ev.claim_due_on ? 'vencido' : 'reclamado'))),
+         fmt.call(ev&.reported_at), fmt.call(ev&.sent_on), fmt.call(ev&.claim_due_on), ev&.claim_due_source.to_s,
+         (ev.nil? ? '' : (ev.sent_on.present? ? ((ev.claim_due_on.blank? || ev.sent_on <= ev.claim_due_on) ? 'enviada_oportuna' : 'enviada_fuera_plazo') : ((ev.claim_due_on.present? && Date.today > ev.claim_due_on) ? 'vencida_sin_envio' : 'pendiente_envio'))),
          snap.dig('motivo', 'raw').to_s, ev&.conciliation_notes.to_s,
          sa.status, full_evaluator(sa)]
       end
@@ -572,7 +577,7 @@ module ServiceAssurance
         :ans_applies, :reported_on, :reported_at, :contract_start_at, :contract_end_at,
         :exclusions,
         :acknowledged_minutes, :conciliation_notes,
-        :credit_requested, :credit_granted, :sent_on, :claim_due_on, :credit_note_ref,
+        :credit_requested, :credit_granted, :sent_on, :claim_due_on, :claim_due_source, :credit_note_ref,
         :compensation_status, :compensation_received
       )
     end

@@ -12,9 +12,9 @@ module FibrazoServiceAssurance
       'Fin falla', 'Inicio a objetar', 'Fin a objetar',
       'Minutos indisponibilidad', 'Clientes afectados', 'ANS aplica',
       'Conciliación aplica', 'Tiempos reconocidos (min)', 'Diferencia (min)',
-      'Resultado', 'Crédito solicitado', 'Crédito reconocido', 'Compensación recibida', 'Saldo pendiente',
+      'Resultado', 'Crédito solicitado', 'Crédito reconocido', 'Valor recibido', 'Comp. pendiente de recibir', 'Dif. reclamado-reconocido',
       'Ref. nota crédito', 'Estado compensación', 'Fecha-hora reporte', 'Fecha reclamación', 'Fecha límite reclamo',
-      'Estado reclamo', 'Motivo cierre ticket',
+      'Fuente límite', 'Estado reclamo', 'Motivo cierre ticket',
       'Motivo cierre SA', 'Estado SA', 'Evaluador'
     ].freeze
 

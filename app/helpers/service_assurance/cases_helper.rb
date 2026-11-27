@@ -10,18 +10,37 @@ module ServiceAssurance
       "##{issue.id}"
     end
 
-    # Estado de reclamación: solo sent_on + claim_due_on, nunca compensación.
-    def sa_claim_status(ev)
-      return 'sin_reclamar' if ev.nil? || ev.sent_on.blank?
-      return 'reclamado' if ev.claim_due_on.blank?
-      Date.today > ev.claim_due_on ? 'vencido' : 'reclamado'
+    # Compensación pendiente = RECONOCIDO − RECIBIDO (nunca reclamado − recibido).
+    # Sin valor reconocido: pendiente de conciliación (jamás cero).
+    # received > granted: inconsistencia a revisar.
+    def sa_compensation_pending(ev)
+      return nil if ev.nil? || ev.credit_granted.nil?
+      ev.credit_granted - (ev.compensation_received || 0)
     end
 
-    # Saldo pendiente = reclamado − recibido. Por evaluación (caso),
-    # nunca por circuito: un incidente multicircuito no duplica importes.
-    def sa_compensation_balance(ev)
-      return nil if ev.nil? || ev.credit_requested.nil?
-      ev.credit_requested - (ev.compensation_received || 0)
+    def sa_compensation_pending_label(ev)
+      return 'pendiente de conciliación' if ev.nil? || ev.credit_granted.nil?
+      p = sa_compensation_pending(ev)
+      return 'revisar (recibido > reconocido)' if p.negative?
+      p
+    end
+
+    # Diferencia reclamado − reconocido (nilsafe).
+    def sa_claim_gap(ev)
+      return nil if ev.nil? || ev.credit_requested.nil? || ev.credit_granted.nil?
+      ev.credit_requested - ev.credit_granted
+    end
+
+    # Estados de reclamación: 4, por envío vs límite, independientes de compensación.
+    def sa_claim_status(ev)
+      return '—' if ev.nil?
+      if ev.sent_on.present?
+        return 'enviada_oportuna' if ev.claim_due_on.blank?
+        ev.sent_on <= ev.claim_due_on ? 'enviada_oportuna' : 'enviada_fuera_plazo'
+      else
+        return 'pendiente_envio' if ev.claim_due_on.blank?
+        Date.today > ev.claim_due_on ? 'vencida_sin_envio' : 'pendiente_envio'
+      end
     end
     def assignee_name(sa_case)
       u = sa_case.assignee

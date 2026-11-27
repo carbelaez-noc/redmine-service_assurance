@@ -229,13 +229,15 @@ dialog.sa-dlg .sa-err{display:none;color:#a94442;background:#fdeeee;border:1px s
   <div><label>Fecha y hora efectiva de reporte carrier</label><%= f.datetime_field :reported_at, value: @evaluation.reported_at, id: 'ev-reported-at' %></div>
   <div><label>Fecha de reclamación formal (envío)</label><%= f.date_field :sent_on, value: @evaluation.sent_on, id: 'ev-sent-on' %></div>
   <div><label>Fecha límite de reclamación</label><%= f.date_field :claim_due_on, value: @evaluation.claim_due_on, id: 'ev-claim-due' %></div>
+  <div><label>Fuente del límite</label><%= f.select :claim_due_source, [['automática (referencia, no contractual)', 'auto'], ['manual justificada (referencia)', 'manual'], ['contractual confirmada', 'contractual']], selected: @evaluation.claim_due_source.presence || 'auto' %></div>
   <div><label>Estado de reclamación</label><strong><%= sa_claim_status(@evaluation) %></strong> <span class="sa-hint">según envío y límite</span></div>
   <div><label>Tiempos reconocidos (min)</label><%= f.number_field :acknowledged_minutes, value: @evaluation.acknowledged_minutes, id: 'ev-ack' %></div>
   <div><label>Diferencia (min)</label><%= f.number_field :difference_minutes, value: @evaluation.difference_minutes, id: 'ev-diff', readonly: true %></div>
   <div><label>Valor reclamado</label><%= f.number_field :credit_requested, value: @evaluation.credit_requested, step: 0.01 %></div>
   <div><label>Valor reconocido</label><%= f.number_field :credit_granted, value: @evaluation.credit_granted, step: 0.01 %></div>
-  <div><label>Valor efectivamente compensado</label><%= f.number_field :compensation_received, value: @evaluation.compensation_received, step: 0.01 %></div>
-  <div><label>Saldo pendiente</label><strong><%= sa_compensation_balance(@evaluation)&.to_s || '—' %></strong> <span class="sa-hint">reclamado − recibido, por caso (no por circuito)</span></div>
+  <div><label>Diferencia reclamado−reconocido</label><strong><%= sa_claim_gap(@evaluation)&.to_s || '—' %></strong></div>
+  <div><label>Valor efectivamente recibido</label><%= f.number_field :compensation_received, value: @evaluation.compensation_received, step: 0.01 %></div>
+  <div><label>Compensación pendiente de recibir</label><strong><%= sa_compensation_pending_label(@evaluation) %></strong> <span class="sa-hint">reconocido − recibido, por caso (no por circuito)</span></div>
   <div><label>Referencia nota crédito</label><%= f.text_field :credit_note_ref, value: @evaluation.credit_note_ref %></div>
   <div><label>Estado de compensación</label><%= f.select :compensation_status, [['pendiente', 'pendiente'], ['parcial', 'parcial'], ['recibida', 'recibida']], selected: @evaluation.compensation_status.presence || 'pendiente' %></div>
   <div><label>Resultado</label><strong><%= @evaluation.result.presence || 'pendiente' %></strong></div>
