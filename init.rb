@@ -21,7 +21,8 @@ Redmine::Plugin.register :fibrazo_service_assurance do
     'cf_ciudad' => '', 'cf_inicio' => '', 'cf_fin' => '', 'cf_clientes' => '',
     'cf_carrier' => '', 'cf_caso_isp' => '', 'cf_categoria' => '',
     'cf_subcategoria' => '', 'cf_motivo' => '', 'cf_motivo_apertura' => '', 'cf_id_externo' => '',
-    'carrier_list' => ''
+    'carrier_list' => '',
+    'allowed_user_ids' => []
   }, partial: 'settings/fibrazo_service_assurance_settings'
 
   project_module :service_assurance do
@@ -35,6 +36,7 @@ Redmine::Plugin.register :fibrazo_service_assurance do
   menu :admin_menu, :service_assurance,
        { controller: 'service_assurance/cases', action: 'index' },
        caption: 'Service Assurance',
+       icon: 'shield-check',
        parent: :fibrazo,
        if: Proc.new { User.current.admin? }
 end

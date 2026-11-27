@@ -379,6 +379,9 @@ module ServiceAssurance
 
     def allowed?(perm)
       return true if User.current.admin?
+      # Nómina explícita: si está configurada, solo ellos (+admins) entran al módulo.
+      roster = Array(Setting.plugin_fibrazo_service_assurance['allowed_user_ids']).map(&:to_i).reject(&:zero?)
+      return roster.include?(User.current.id) if roster.any?
       project = @sa_case&.issue&.project
       return User.current.allowed_to?(perm, project) if project
       User.current.projects.to_a.any? { |p| User.current.allowed_to?(perm, p) }

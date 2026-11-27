@@ -35,13 +35,24 @@
   <em>Deshabilitada por defecto.</em>
 </p>
 <fieldset><legend>Campos de precarga (vacío = autodetección por nombre; sin IDs en código)</legend>
-<% [['cf_ciudad','Ciudad'],['cf_inicio','Inicio de falla (CF21)'],['cf_fin','Fin de falla (CF22)'],['cf_clientes','Clientes afectados'],['cf_carrier','Carrier'],['cf_caso_isp','# Caso ISP'],['cf_categoria','Categoría cierre'],['cf_subcategoria','Subcategoría cierre'],['cf_motivo','Motivo cierre'],['cf_motivo_apertura','Motivo apertura'],['cf_id_externo','ID externo']].each do |key,label| %>
+<% cfs = IssueCustomField.order(:name).map { |f| ["#{f.name} (##{f.id})", f.id.to_s] } %>
+<% [['cf_ciudad','Ciudad','ciudad'],['cf_inicio','Inicio de falla','inicio'],['cf_fin','Fin de falla','fin'],['cf_clientes','Clientes afectados','clientes'],['cf_carrier','Carrier','carrier'],['cf_caso_isp','# Caso ISP','caso_isp'],['cf_categoria','Categoría cierre','categoria'],['cf_subcategoria','Subcategoría cierre','subcategoria'],['cf_motivo','Motivo cierre','motivo'],['cf_motivo_apertura','Motivo apertura','motivo_apertura'],['cf_id_externo','ID externo','id_externo']].each do |key,label,mapkey| %>
+<% auto = (s && FibrazoServiceAssurance::PreloadMap.field_for(mapkey)) %>
 <p>
   <label><%= label %></label>
-  <%= text_field_tag "settings[#{key}]", @settings[key], size: 6 %>
-  <em>Autodetectado: <%= (f = (s && FibrazoServiceAssurance::PreloadMap.field_for(key.sub('cf_','')))) ? "#{f.name} (##{f.id})" : '—' %></em>
+  <%= select_tag "settings[#{key}]", options_for_select([['— autodetectar —', '']] + cfs, @settings[key].to_s.presence || auto&.id.to_s) %>
+  <em>Autodetectado: <%= auto ? "#{auto.name} (##{auto.id})" : '—' %></em>
 </p>
 <% end %>
+</fieldset>
+<fieldset><legend>Acceso al módulo (vacío = por permisos de proyecto; con selección = solo ellos + admins)</legend>
+<p>
+  <label>Usuarios con acceso a Service Assurance</label><br/>
+  <%= select_tag 'settings[allowed_user_ids][]',
+      options_from_collection_for_select(User.active.order(:firstname, :lastname).limit(500), :id, ->(u) { "#{u.firstname} #{u.lastname} (#{u.login})".strip }, Array(@settings['allowed_user_ids']).map(&:to_i)),
+      multiple: true, size: 10 %>
+  <em>Solo los seleccionados (más administradores) pueden ver y operar el módulo. Vacío = rige el sistema de permisos por proyecto/rol.</em>
+</p>
 </fieldset>
 <p>
   <label>Carriers seleccionables (uno por línea)</label><br/>
