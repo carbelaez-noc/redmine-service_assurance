@@ -79,13 +79,14 @@ module FibrazoServiceAssurance
     end
 
     # Completitud por pestaña (B fusiona evaluación + contractual).
-    def tab_states(_sa_case, evaluation)
+    def tab_states(sa_case, evaluation)
       ev = evaluation || ServiceAssuranceEvaluation.new
       b = ev.provider.present? && ev.external_case.present? && ev.service_id.to_s.strip.present? &&
           ev.contract_start_at.present? && ev.contract_end_at.present? &&
           !ev.affected_customers.nil? && !ev.ans_applies.nil? && ev.reported_on.present?
       d = d_complete?(ev)
-      { a: true, b: b, d: d, f: true }
+      c = sa_case.respond_to?(:circuits) ? sa_case.circuits.any? : false
+      { a: true, b: b, c: c, d: d, f: true }
     end
 
     def d_complete?(ev)

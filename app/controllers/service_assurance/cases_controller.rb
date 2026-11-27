@@ -246,13 +246,15 @@ module ServiceAssurance
                    'capacity' => cache.capacity_label, 'description' => cache.description,
                    'captured_at' => Time.zone.now.strftime('%Y-%m-%d %H:%M') }
           attrs = { nb_circuit_id: nb_id, circuit: cache.cid_original, source: 'netbox',
-                    carrier_ref: ref.presence || cache.cid_original, snapshot_json: snap.to_json, note: note.presence }
+                    carrier_ref: ref.presence || cache.cid_original, snapshot_json: snap.to_json, note: note.presence,
+                    affected_capacity: h['affected_capacity'].to_s.strip.presence }
         else
           raise CircuitError, 'Referencia manual requiere justificación (nota obligatoria)' if manual.empty? || note.empty?
           snap = { 'manual_cid' => manual, 'carrier_ref' => ref.presence || manual,
                    'pending_validation' => true, 'captured_at' => Time.zone.now.strftime('%Y-%m-%d %H:%M') }
           attrs = { nb_circuit_id: nil, circuit: manual, source: 'manual',
-                    carrier_ref: ref.presence || manual, snapshot_json: snap.to_json, note: note }
+                    carrier_ref: ref.presence || manual, snapshot_json: snap.to_json, note: note,
+                    affected_capacity: h['affected_capacity'].to_s.strip.presence }
         end
         rec = link_id ? @sa_case.circuits.find_by(id: link_id) : @sa_case.circuits.find_by(nb_circuit_id: nb_id, circuit: attrs[:circuit])
         if rec
@@ -392,7 +394,29 @@ module ServiceAssurance
          sa.status, full_evaluator(sa)]
       end
       rows.select! { |r| r[5].to_s.downcase.include?(carrier.downcase) } if carrier.present?
-      data = FibrazoServiceAssurance::CarrierXlsx.build(rows)
+      circuit_rows = []
+      cases.order(:id).limit(2000).each do |sa|
+        ev = sa.evaluation
+        issue = sa.issue
+        sa.circuits.each do |lc|
+          snap = (JSON.parse(lc.snapshot_json || '{}') rescue {})
+          times = lc.intervals.order(:start_at).to_a
+          base = [issue&.id, issue_folio(issue), lc.carrier_ref.presence || lc.circuit,
+                  lc.source == 'netbox' ? (snap['cid'] || lc.circuit) : lc.circuit,
+                  snap['provider'] || ev&.provider,
+                  snap['capacity'] || '—', lc.affected_capacity.presence || '—',
+                  lc.source == 'netbox' ? 'NetBox' : 'manual — pendiente de validación']
+          if times.any?
+            times.each do |t|
+              circuit_rows << (base + [t.kind, sa_fmt(t.start_at), sa_fmt(t.end_at), t.minutes, 'propios del circuito'])
+            end
+          else
+            circuit_rows << (base + [ev&.impact_type.to_s, sa_fmt(ev&.contract_start_at), sa_fmt(ev&.contract_end_at), ev&.downtime_minutes, 'general del incidente'])
+          end
+        end
+      end
+      circuit_rows.select! { |r| r[4].to_s.downcase.include?(carrier.downcase) } if carrier.present?
+      data = FibrazoServiceAssurance::CarrierXlsx.build(rows, circuit_rows)
       send_data data, filename: "service_assurance_#{Date.today.strftime('%Y%m%d')}.xlsx",
                       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     end
@@ -407,6 +431,10 @@ module ServiceAssurance
     end
 
     private
+
+    def sa_fmt(value)
+      value.respond_to?(:strftime) ? value.strftime('%Y-%m-%d %H:%M') : value.to_s
+    end
 
     def render_show
       @evaluation ||= @sa_case.evaluation || @sa_case.build_evaluation

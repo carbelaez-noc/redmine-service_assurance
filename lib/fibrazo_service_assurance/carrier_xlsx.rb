@@ -16,12 +16,19 @@ module FibrazoServiceAssurance
       'Motivo cierre SA', 'Estado SA', 'Evaluador'
     ].freeze
 
-    def self.build(rows)
-      new(rows).to_bytes
+    CIRCUIT_HEADERS = [
+      'Ticket', 'Folio', 'Circuito (ref carrier)', 'CID original', 'Proveedor',
+      'Capacidad registrada', 'Cap. afectada', 'Validación', 'Tipo afectación',
+      'Inicio', 'Fin', 'Minutos', 'Fuente tiempos'
+    ].freeze
+
+    def self.build(rows, circuit_rows = [])
+      new(rows, circuit_rows).to_bytes
     end
 
-    def initialize(rows)
+    def initialize(rows, circuit_rows = [])
       @rows = rows
+      @circuit_rows = circuit_rows || []
     end
 
     def to_bytes
@@ -32,6 +39,7 @@ module FibrazoServiceAssurance
         write_entry(zio, 'xl/_rels/workbook.xml.rels', workbook_rels)
         write_entry(zio, 'xl/styles.xml', styles)
         write_entry(zio, 'xl/worksheets/sheet1.xml', sheet)
+        write_entry(zio, 'xl/worksheets/sheet2.xml', sheet2) if @circuit_rows.any?
       end
       buf.string
     end
@@ -80,7 +88,7 @@ module FibrazoServiceAssurance
     def content_types
       <<~XML
         <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-        <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>
+        <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>#{@circuit_rows.any? ? '<Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' : ''}<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>
       XML
     end
 
@@ -94,15 +102,26 @@ module FibrazoServiceAssurance
     def workbook
       <<~XML
         <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-        <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Conciliacion" sheetId="1" r:id="rId1"/></sheets></workbook>
+        <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Conciliacion" sheetId="1" r:id="rId1"/>#{@circuit_rows.any? ? '<sheet name="Circuitos asociados" sheetId="2" r:id="rId3"/>' : ''}</sheets></workbook>
       XML
     end
 
     def workbook_rels
       <<~XML
         <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>
+        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>#{@circuit_rows.any? ? '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>' : ''}</Relationships>
       XML
+    end
+
+    def sheet2
+      xml = ['<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+             '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>']
+      xml << row_xml(1, CIRCUIT_HEADERS, 1)
+      @circuit_rows.each_with_index do |row, i|
+        xml << row_xml(i + 2, row, 0)
+      end
+      xml << '</sheetData></worksheet>'
+      xml.join
     end
 
     def styles
