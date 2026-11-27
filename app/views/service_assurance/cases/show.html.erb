@@ -11,6 +11,7 @@
 .sa-grid label{display:block;font-weight:bold;margin-bottom:2px}
 .sa-grid input,.sa-grid select,.sa-grid textarea{width:100%;max-width:100%;box-sizing:border-box}
 .sa-grid input[readonly]{background:#f4f4f4}
+.sa-grid input.sa-empty,.sa-grid select.sa-empty,.sa-grid textarea.sa-empty{background:#fdeeee;border:1px solid #f3b8b8}
 .sa-calc{font-size:12.5px;color:#5b6570;margin:6px 0}
 .sa-calc strong{color:#111}
 .sa-journal{margin:6px 0;border:1px solid #e0e0e0;border-radius:4px}
@@ -200,6 +201,16 @@ dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 
   <menu style="text-align:right"><button type="button" class="sa-btn primary" id="dlg-warn-ok">Revisar</button></menu>
 </dialog>
 <script>
+// Vacío = rojo pastel. Se marca al cargar, al editar y tras cada guardado.
+function saMarkEmpty(){
+  document.querySelectorAll('#sa-form .sa-grid input,#sa-form .sa-grid select,#sa-form .sa-grid textarea').forEach(function(el){
+    if(el.readOnly||el.disabled)return;
+    var v=String(el.value||'').trim();
+    if(v===''||v==='—')el.classList.add('sa-empty');else el.classList.remove('sa-empty');
+  });
+}
+document.getElementById('sa-form').addEventListener('input',function(){saMarkEmpty();});
+saMarkEmpty();
 function saMin(a,b){if(!a||!b)return null;var ms=new Date(b)-new Date(a);if(isNaN(ms)||ms<=0)return null;return Math.round(ms/60000);}
 function saHuman(m){if(m==null)return '—';var h=Math.floor(m/60);return h>0?h+'h '+(m%60)+'m ('+m+' min)':m+' min';}
 function saToLocal(v){if(!v)return '';var d=new Date(v.replace(' ','T'));if(isNaN(d))return '';var p=function(n){return (n<10?'0':'')+n;};return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes());}
@@ -234,7 +245,7 @@ function saAutosave(){
         if(j.downtime!=null)document.getElementById('ev-downtime').value=j.downtime;
         if(j.difference!=null)document.getElementById('ev-diff').value=j.difference;
         saApplyTabs(j.tab_states);
-        saCalc();
+        saCalc();saMarkEmpty();
       }else{badge.textContent='Error: '+(j.error||'no guardado');}
     })
     .catch(function(){badge.textContent='Sin conexión: no guardado';});
