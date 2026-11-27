@@ -45,6 +45,45 @@
 </p>
 <% end %>
 </fieldset>
+<fieldset><legend>NetBox — inventario de circuitos (solo lectura)</legend>
+<p>
+  <label>URL base NetBox</label>
+  <%= text_field_tag 'settings[netbox_base_url]', @settings['netbox_base_url'].presence || 'https://nb.fibrazo.com.co', size: 40 %>
+</p>
+<p>
+  <label>Token</label>
+  <span id="sa-token-state"><%= FibrazoServiceAssurance::NetboxTokenStore.configured? ? 'configurado (cifrado, nunca visible)' : 'ausente' %></span><br>
+  <input type="password" id="sa-token-new" size="40" autocomplete="new-password" placeholder="Pegar nuevo token para cambiarlo">
+  <button type="button" class="sa-btn" id="sa-token-save">Cambiar token</button>
+  <span id="sa-token-msg"></span><br>
+  <em>Cambiarlo aquí lo cifra y reemplaza sin mostrarlo. Úselo si caduca en NetBox.</em>
+</p>
+<script>
+(function(){
+var b=document.getElementById('sa-token-save');
+if(!b)return;
+b.addEventListener('click',function(){
+  var v=document.getElementById('sa-token-new').value;
+  var msg=document.getElementById('sa-token-msg');
+  if(!v){msg.textContent='Pegue el token primero';return;}
+  msg.textContent='Guardando…';
+  var fd=new FormData();fd.append('token',v);
+  var csrf=(document.querySelector('meta[name=csrf-token]')||{}).content||'';
+  fetch('/service_assurance/cases/netbox_token',{method:'POST',body:fd,credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest','X-CSRF-Token':csrf}})
+  .then(function(r){return r.json();})
+  .then(function(j){msg.textContent=j.message||(j.ok?'Token actualizado':'Error');document.getElementById('sa-token-new').value='';})
+  .catch(function(){msg.textContent='Sin conexión';});
+});
+})();
+</script>
+<p>
+  <label>Última sincronización</label>
+  <%= @settings['netbox_last_sync_at'].presence || '—' %> ·
+  <%= h(@settings['netbox_last_result'].to_s) %> ·
+  <%= @settings['netbox_last_count'].to_s %> circuitos en caché
+  <%= link_to 'Sincronizar ahora', '/service_assurance/cases/netbox_sync', method: :post, class: 'sa-btn' %>
+</p>
+</fieldset>
 <fieldset class="sa-roster"><legend>Acceso al módulo (vacío = por permisos de proyecto; con selección = solo ellos + admins)</legend>
 <p class="sa-roster-mode">Modo efectivo: <strong id="sa-roster-mode">—</strong></p>
 <div class="sa-duo">

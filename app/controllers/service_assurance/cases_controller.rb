@@ -204,6 +204,10 @@ module ServiceAssurance
       ActiveRecord::Base.transaction do
         @evaluation.save!
         @sa_case.save!
+        if !@sa_case.final?
+          rec_by_ix = reconcile_circuits!(params[:circuit_links], changed)
+          save_circuit_intervals!(params[:circuit_intervals], rec_by_ix, changed) if params.key?(:circuit_intervals)
+        end
         changed.each { |f, o, n| ServiceAssuranceAudit.log(@sa_case.id, User.current.id, 'update', f, [o, n]) }
       end
       if request.xhr?
@@ -215,9 +219,83 @@ module ServiceAssurance
       end
       flash[:notice] = 'Avance guardado'
       redirect_to service_assurance_case_path(@sa_case)
+    rescue CircuitError => e
+      update_fail(e.message)
     rescue ActiveRecord::StaleObjectError
       update_fail('Otro evaluador guardó cambios mientras editaba. Recargue y reintente.')
     end
+
+    # Reconcilia circuitos asociados (chips del bloque B). Snapshot al asociar;
+    # un cambio posterior en NetBox no altera evaluaciones guardadas.
+    def reconcile_circuits!(links, changed)
+      raw = links.respond_to?(:to_unsafe_h) ? links.to_unsafe_h : links
+      incoming = Array(raw.is_a?(Hash) ? raw.values : raw)
+      keep_ids = []
+      rec_by_ix = {}
+      incoming.each_with_index do |l, ix|
+        h = l.respond_to?(:to_unsafe_h) ? l.to_unsafe_h : l.to_h
+        nb_id = h['nb_id'].to_s.strip.presence&.to_i
+        manual = h['manual_cid'].to_s.strip
+        ref = h['carrier_ref'].to_s.strip
+        note = h['note'].to_s.strip
+        link_id = h['link_id'].to_s.strip.presence&.to_i
+        if nb_id
+          cache = ServiceAssuranceNetboxCircuit.find_by(nb_id: nb_id)
+          raise CircuitError, "Circuito NetBox #{nb_id} no está en caché" if cache.nil?
+          snap = { 'nb_id' => cache.nb_id, 'cid' => cache.cid_original, 'provider' => cache.provider_name,
+                   'capacity' => cache.capacity_label, 'description' => cache.description,
+                   'captured_at' => Time.zone.now.strftime('%Y-%m-%d %H:%M') }
+          attrs = { nb_circuit_id: nb_id, circuit: cache.cid_original, source: 'netbox',
+                    carrier_ref: ref.presence || cache.cid_original, snapshot_json: snap.to_json, note: note.presence,
+                    affected_capacity: h['affected_capacity'].to_s.strip.presence }
+        else
+          raise CircuitError, 'Referencia manual requiere justificación (nota obligatoria)' if manual.empty? || note.empty?
+          snap = { 'manual_cid' => manual, 'carrier_ref' => ref.presence || manual,
+                   'pending_validation' => true, 'captured_at' => Time.zone.now.strftime('%Y-%m-%d %H:%M') }
+          attrs = { nb_circuit_id: nil, circuit: manual, source: 'manual',
+                    carrier_ref: ref.presence || manual, snapshot_json: snap.to_json, note: note,
+                    affected_capacity: h['affected_capacity'].to_s.strip.presence }
+        end
+        rec = link_id ? @sa_case.circuits.find_by(id: link_id) : @sa_case.circuits.find_by(nb_circuit_id: nb_id, circuit: attrs[:circuit])
+        if rec
+          rec.update!(attrs)
+        else
+          rec = @sa_case.circuits.create!(attrs)
+          changed << ['circuit_add', nil, attrs[:circuit]]
+        end
+        keep_ids << rec.id
+        rec_by_ix[ix.to_s] = rec.id
+      end
+      removed = @sa_case.circuits.where.not(id: keep_ids)
+      removed.each { |r| changed << ['circuit_del', r.circuit, nil] }
+      removed.destroy_all
+      rec_by_ix
+    end
+
+    # Intervalos propios por circuito (tiempos que difieren del general).
+    # Solo toca intervalos ligados a circuitos; los generales se preservan.
+    def save_circuit_intervals!(raw_intervals, rec_by_ix, changed)
+      hash = raw_intervals.respond_to?(:to_unsafe_h) ? raw_intervals.to_unsafe_h : raw_intervals
+      hash = {} unless hash.is_a?(Hash)
+      errors = []
+      touched = []
+      hash.each do |ix, rows_raw|
+        rec_id = rec_by_ix[ix.to_s]
+        next if rec_id.nil?
+        rows = parse_rows(rows_raw, %w[kind start_at end_at note], errors)
+        return update_fail(errors.first) if errors.any?
+        link = @sa_case.circuits.find(rec_id)
+        link.intervals.destroy_all
+        rows.each do |r|
+          link.intervals.create!(case_id: @sa_case.id, kind: r['kind'], start_at: r['start_at'], end_at: r['end_at'], note: r['note'])
+        end
+        touched << link.id
+        changed << ['circuit_times', link.carrier_ref, "#{rows.size} intervalo(s)"] if rows.any?
+      end
+      # Circuitos sin filas enviadas conservan sus intervalos (no se asume nada).
+    end
+
+    class CircuitError < StandardError; end
 
     def update_fail(message)
       if request.xhr?
@@ -249,7 +327,42 @@ module ServiceAssurance
       redirect_to service_assurance_case_path(@sa_case)
     end
 
+    # Búsqueda de circuitos NetBox en caché local (solo lectura).
+    def netbox_search
+      return render_403 unless allowed?(:view_service_assurance)
+      q = params[:q].to_s.strip
+      provider = params[:provider].to_s.strip
+      scope = ServiceAssuranceNetboxCircuit.where(in_inventory: true).order(:provider_name, :cid_original).limit(200)
+      scope = scope.where(provider_name: provider) if provider.present?
+      rows = scope.to_a.select { |c| c.matches?(q) }.first(20).map do |c|
+        { nb_id: c.nb_id, cid: c.cid_original, provider: c.provider_name,
+          capacity: c.capacity_label, type: c.circuit_type, status: c.status,
+          description: c.description.presence || '—',
+          endpoints: 'Sin información', url: c.url,
+          updated: c.nb_updated_at&.strftime('%Y-%m-%d %H:%M') }
+      end
+      render json: { ok: true, count: rows.size, rows: rows }
+    end
+
+    def netbox_sync
+      return render_403 unless User.current.admin?
+      res = FibrazoServiceAssurance::NetboxSync.run(manual: true)
+      flash[res.ok ? :notice : :error] = res.ok ? "NetBox sincronizado: #{res.synced} circuitos" : "Sync NetBox falló: #{res.errors.join('; ')}"
+      redirect_to '/settings/plugin/fibrazo_service_assurance'
+    end
+
     # Exporta los casos del periodo en formato de entrega al carrier (XLSX).
+    def netbox_token
+      return render_403 unless User.current.admin?
+      ok = FibrazoServiceAssurance::NetboxTokenStore.save(params[:token].to_s)
+      if request.xhr?
+        render json: { ok: ok, message: ok ? 'Token actualizado y cifrado' : 'Token vacío: sin cambios' }
+        return
+      end
+      flash[ok ? :notice : :error] = ok ? 'Token NetBox guardado cifrado' : 'Token vacío: sin cambios'
+      redirect_to '/service_assurance/admin'
+    end
+
     def export
       unless allowed?(:view_service_assurance)
         return render_403
@@ -281,7 +394,29 @@ module ServiceAssurance
          sa.status, full_evaluator(sa)]
       end
       rows.select! { |r| r[5].to_s.downcase.include?(carrier.downcase) } if carrier.present?
-      data = FibrazoServiceAssurance::CarrierXlsx.build(rows)
+      circuit_rows = []
+      cases.order(:id).limit(2000).each do |sa|
+        ev = sa.evaluation
+        issue = sa.issue
+        sa.circuits.each do |lc|
+          snap = (JSON.parse(lc.snapshot_json || '{}') rescue {})
+          times = lc.intervals.order(:start_at).to_a
+          base = [issue&.id, issue_folio(issue), lc.carrier_ref.presence || lc.circuit,
+                  lc.source == 'netbox' ? (snap['cid'] || lc.circuit) : lc.circuit,
+                  snap['provider'] || ev&.provider,
+                  snap['capacity'] || '—', lc.affected_capacity.presence || '—',
+                  lc.source == 'netbox' ? 'NetBox' : 'manual — pendiente de validación']
+          if times.any?
+            times.each do |t|
+              circuit_rows << (base + [t.kind, sa_fmt(t.start_at), sa_fmt(t.end_at), t.minutes, 'propios del circuito'])
+            end
+          else
+            circuit_rows << (base + [ev&.impact_type.to_s, sa_fmt(ev&.contract_start_at), sa_fmt(ev&.contract_end_at), ev&.downtime_minutes, 'general del incidente'])
+          end
+        end
+      end
+      circuit_rows.select! { |r| r[4].to_s.downcase.include?(carrier.downcase) } if carrier.present?
+      data = FibrazoServiceAssurance::CarrierXlsx.build(rows, circuit_rows)
       send_data data, filename: "service_assurance_#{Date.today.strftime('%Y%m%d')}.xlsx",
                       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     end
@@ -296,6 +431,10 @@ module ServiceAssurance
     end
 
     private
+
+    def sa_fmt(value)
+      value.respond_to?(:strftime) ? value.strftime('%Y-%m-%d %H:%M') : value.to_s
+    end
 
     def render_show
       @evaluation ||= @sa_case.evaluation || @sa_case.build_evaluation

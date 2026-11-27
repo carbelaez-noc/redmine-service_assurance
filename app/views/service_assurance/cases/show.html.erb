@@ -47,6 +47,22 @@ dialog.sa-dlg label{display:block;font-size:11px;color:#5b6570;font-weight:bold;
 dialog.sa-dlg input,dialog.sa-dlg textarea{width:100%;box-sizing:border-box;border:1px solid #cfd4d9;border-radius:6px;padding:5px 8px;font-size:13px}
 dialog.sa-dlg menu{display:flex;gap:8px;justify-content:flex-end;padding:12px 0 0;margin:0}
 dialog.sa-dlg .sa-err{display:none;color:#a94442;background:#fdeeee;border:1px solid #f3b8b8;border-radius:6px;padding:6px 10px;margin:8px 0 0}
+.sa-nb input[type=search]{width:100%;box-sizing:border-box;border:1px solid #cfd4d9;border-radius:6px;padding:5px 8px}
+.sa-nb-results{display:flex;flex-direction:column;gap:4px;margin:6px 0;max-height:190px;overflow-y:auto}
+.sa-nb-row{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#f7f9fb;border-radius:8px;padding:6px 10px;font-size:12.5px}
+.sa-nb-row small{color:#5b6570}
+.sa-nb-chips{display:flex;flex-direction:column;gap:4px;margin:6px 0}
+.sa-nb-chip{display:flex;gap:6px;align-items:center;background:#eef6ee;border:1px solid #bfe0bf;border-radius:8px;padding:6px 10px;font-size:12.5px;flex-wrap:wrap}
+.sa-nb-chip span{flex:1 1 200px}
+.sa-nb-chip input[type=text]{border:1px solid #cfd4d9;border-radius:6px;padding:3px 6px;font-size:12px;width:170px}
+.sa-nb-chip button{border:none;background:none;color:#a94442;cursor:pointer;font-size:15px}
+.sa-nb-manual{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.sa-nb-manual input{flex:1 1 180px;border:1px solid #cfd4d9;border-radius:6px;padding:4px 8px}
+.sa-nb-times{display:flex;flex-direction:column;gap:4px;margin-top:6px;flex-basis:100%}
+.sa-nb-trow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;background:#f7f9fb;border-radius:6px;padding:4px 6px}
+.sa-nb-trow select,.sa-nb-trow input{border:1px solid #cfd4d9;border-radius:6px;padding:3px 6px;font-size:12px}
+.sa-nb-tbtns{display:flex;gap:8px;align-items:center;margin-top:4px;flex-basis:100%}
+.sa-nb-tbtns small{color:#5b6570}
 .sa-subnav{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
 .sa-subnav a{display:inline-block;padding:4px 12px;border:1px solid #cfd4d9;border-radius:6px;background:#fff;text-decoration:none;font-size:12.5px;color:#1f6feb;font-weight:600}
 .sa-subnav a:hover{background:#eef4ff;text-decoration:none}
@@ -69,7 +85,8 @@ dialog.sa-dlg .sa-err{display:none;color:#a94442;background:#fdeeee;border:1px s
 <div class="sa-tabbar">
 <button type="button" data-tab="panel-a" class="<%= @tab_states[:a] ? 'ok' : 'todo' %> active">A. Ticket</button>
 <button type="button" data-tab="panel-b" class="<%= @tab_states[:b] ? 'ok' : 'todo' %>">B. Evaluación y contractual</button>
-<% if %w[por_conciliar conciliado].include?(@sa_case.status) %><button type="button" data-tab="panel-d" class="<%= @tab_states[:d] ? 'ok' : 'todo' %>">C. Conciliación</button><% end %>
+<button type="button" data-tab="panel-c" class="<%= @tab_states[:c] ? 'ok' : 'todo' %>">C. Circuitos y servicios</button>
+<% if %w[por_conciliar conciliado].include?(@sa_case.status) %><button type="button" data-tab="panel-d" class="<%= @tab_states[:d] ? 'ok' : 'todo' %>">D. Conciliación</button><% end %>
 </div>
 <div class="sa-flow">
 <input type="hidden" name="transition" id="sa-transition" value="save">
@@ -85,6 +102,34 @@ dialog.sa-dlg .sa-err{display:none;color:#a94442;background:#fdeeee;border:1px s
 <section class="sa-panel active" id="panel-a">
 <h3>A. Información original del ticket</h3>
   <p><strong>Asunto:</strong> <%= @issue.subject %></p>
+  <% hist_ids = %w[categoria subcategoria motivo motivo_apertura carrier caso_isp].flat_map { |k| [(FibrazoServiceAssurance::PreloadMap.field_for(k)&.id), Setting.plugin_fibrazo_service_assurance["cf_#{k}"].to_i.presence] }.compact.uniq %>
+  <% hist_cfs = {} %>
+  <% @issue.journals.each do |j| %>
+    <% j.details.each do |d| %>
+      <% if d.prop_key.to_s =~ /\A\d+\z/ && hist_ids.include?(d.prop_key.to_i) && (cf = CustomField.find_by_id(d.prop_key.to_i)) %>
+        <% hist_cfs[cf.id] = cf.name %>
+      <% end %>
+    <% end %>
+  <% end %>
+  <% hist_rows = [] %>
+  <% @issue.journals.each do |j| %>
+    <% j.details.each do |d| %>
+      <% if d.prop_key == 'status_id' %>
+        <% hist_rows << [j.created_on, (j.user ? j.user.login : '?'), 'Estado', (IssueStatus.find_by_id(d.old_value)&.name || d.old_value).to_s, (IssueStatus.find_by_id(d.value)&.name || d.value).to_s] %>
+      <% elsif d.prop_key.to_s =~ /\A\d+\z/ && hist_cfs[d.prop_key.to_i] %>
+        <% hist_rows << [j.created_on, (j.user ? j.user.login : '?'), hist_cfs[d.prop_key.to_i], d.old_value.to_s, d.value.to_s] %>
+      <% end %>
+    <% end %>
+  <% end %>
+  <% if hist_rows.any? %>
+  <details class="sa-hist"><summary>Historia de tipificación del caso (<%= hist_rows.size %> cambios, clic para ver)</summary>
+  <table class="list"><thead><tr><th>Fecha</th><th>Usuario</th><th>Campo</th><th>Antes</th><th>Después</th></tr></thead>
+  <tbody><% hist_rows.first(25).each do |r| %><tr><td><%= r[0]&.strftime('%Y-%m-%d %H:%M') %></td><td><%= h(r[1]) %></td><td><%= h(r[2]) %></td><td><%= h(r[3].to_s[0, 80]) %></td><td><%= h(r[4].to_s[0, 80]) %></td></tr><% end %></tbody>
+  <% if hist_rows.size > 25 %><tbody id="sa-hist-rest" style="display:none"><% hist_rows.drop(25).each do |r| %><tr><td><%= r[0]&.strftime('%Y-%m-%d %H:%M') %></td><td><%= h(r[1]) %></td><td><%= h(r[2]) %></td><td><%= h(r[3].to_s[0, 80]) %></td><td><%= h(r[4].to_s[0, 80]) %></td></tr><% end %></tbody><% end %></table>
+  <% if hist_rows.size > 25 %><p><a href="#" id="sa-hist-more">Ver historial completo (<%= hist_rows.size %>)</a></p><% end %>
+  </details>
+  <script>(function(){var m=document.getElementById('sa-hist-more');if(m)m.addEventListener('click',function(e){e.preventDefault();var r=document.getElementById('sa-hist-rest');var open=r.style.display==='none';r.style.display=open?'':'none';m.textContent=open?'Ver menos':'Ver historial completo';});})();</script>
+  <% end %>
   <% if snap.any? %>
   <% line = { 'ciudad' => 'Ciudad', 'inicio' => 'Inicio de falla', 'fin' => 'Fin de falla', 'clientes' => 'Clientes afectados', 'motivo_apertura' => 'Motivo de apertura', 'carrier' => 'Carrier', 'caso_isp' => '# Caso ISP', 'id_externo' => 'ID externo', 'categoria' => 'Categoría de cierre', 'subcategoria' => 'Subcategoría de cierre', 'motivo' => 'Motivo de cierre' } %>
   <div class="sa-line">
@@ -121,13 +166,61 @@ dialog.sa-dlg .sa-err{display:none;color:#a94442;background:#fdeeee;border:1px s
   <div><label>Fin a objetar</label>
     <%= f.datetime_field :contract_end_at, value: @evaluation.contract_end_at, id: 'ev-contract-end' %></div>
   <div class="full"><label>Observaciones</label><%= f.text_area :observations, value: @evaluation.observations, rows: 4 %></div>
+  <div class="full"><label>Circuitos asociados</label>
+    <div class="sa-calc"><strong id="sa-circ-count"><%= @sa_case.circuits.size %></strong> circuito(s) asociado(s) — <button type="button" class="sa-btn" data-goto="panel-c">Gestionar en C. Circuitos y servicios</button></div>
+  </div>
 </div>
 <p class="sa-hint">* El escalamiento es obligatorio para avanzar. Las fechas no aceptan futuro ni anteriores al inicio de la falla.</p>
 </section>
 
+<section class="sa-panel" id="panel-c">
+<h3>C. Circuitos y servicios (Capacidad registrada en NetBox, no comercial confirmada)</h3>
+<div class="sa-calc">Asocie uno o varios circuitos. Cada uno puede tener tiempos propios; si los comparte, herédelos de B.</div>
+    <div class="sa-nb">
+      <input type="search" id="sa-nb-q" placeholder="Buscar por CID, componente, descripción o ruta…" autocomplete="off">
+      <div id="sa-nb-results" class="sa-nb-results"></div>
+      <div id="sa-nb-chips" class="sa-nb-chips">
+        <% @sa_case.circuits.each_with_index do |lc, ix| %>
+          <% snap = (JSON.parse(lc.snapshot_json || '{}') rescue {}) %>
+          <% times = lc.intervals.order(:start_at).to_a %>
+          <% obj_min = times.select { |t| t.kind == 'tecnica' }.sum(&:minutes) %>
+          <% rec_min = times.select { |t| t.kind == 'reconocida' }.sum(&:minutes) %>
+          <div class="sa-nb-chip" data-ix="<%= ix %>">
+            <span><strong><%= h(lc.carrier_ref.presence || lc.circuit) %></strong> · <%= h(lc.source == 'netbox' ? (snap['capacity'] || 'NetBox') : 'manual — pendiente de validación') %><% if lc.source == 'netbox' && snap['url'] %> · <a target="_blank" href="<%= h(snap['url']) %>">NetBox</a><% end %></span>
+            <input type="text" name="circuit_links[<%= ix %>][carrier_ref]" value="<%= h(lc.carrier_ref.to_s) %>" title="Identificador usado ante el carrier" placeholder="Ref. carrier">
+            <input type="text" name="circuit_links[<%= ix %>][affected_capacity]" value="<%= h(lc.affected_capacity.to_s) %>" title="Capacidad afectada conocida" placeholder="Cap. afectada">
+            <input type="text" name="circuit_links[<%= ix %>][note]" value="<%= h(lc.note.to_s) %>" placeholder="nota / justificación">
+            <button type="button" data-unlink="<%= ix %>" title="Retirar">×</button>
+            <input type="hidden" name="circuit_links[<%= ix %>][link_id]" value="<%= lc.id %>">
+            <input type="hidden" name="circuit_links[<%= ix %>][nb_id]" value="<%= lc.nb_circuit_id %>">
+            <input type="hidden" name="circuit_links[<%= ix %>][manual_cid]" value="<%= lc.source == 'manual' ? h(lc.circuit) : '' %>">
+            <div class="sa-nb-times" id="sa-times-<%= ix %>">
+              <% times.each do |tm| %>
+              <div class="sa-nb-trow">
+                <select name="circuit_intervals[<%= ix %>][][kind]"><%= options_for_select([['Técnica','tecnica'],['Degradación','degradacion'],['Exclusión','exclusion'],['Reconocida','reconocida']], tm.kind) %></select>
+                <input type="datetime-local" name="circuit_intervals[<%= ix %>][][start_at]" value="<%= tm.start_at&.strftime('%Y-%m-%dT%H:%M') %>">
+                <input type="datetime-local" name="circuit_intervals[<%= ix %>][][end_at]" value="<%= tm.end_at&.strftime('%Y-%m-%dT%H:%M') %>">
+                <input type="text" name="circuit_intervals[<%= ix %>][][note]" value="<%= h(tm.note.to_s) %>" placeholder="nota">
+                <button type="button" data-rmtime title="Quitar">×</button>
+              </div>
+              <% end %>
+            </div>
+            <div class="sa-nb-tbtns"><button type="button" class="sa-mini" data-addtime="<%= ix %>">＋ tiempo propio</button><button type="button" class="sa-mini" data-inherit="<%= ix %>" title="Copiar inicio/fin a objetar de B">↙ heredar tiempos generales</button><small>Propio: <%= obj_min %> min obj · <%= rec_min %> min rec</small></div>
+          </div>
+        <% end %>
+      </div>
+      <div class="sa-nb-manual">
+        <input type="text" id="sa-nb-manual-cid" placeholder="Referencia manual (si no existe en NetBox)">
+        <input type="text" id="sa-nb-manual-note" placeholder="Justificación obligatoria">
+        <button type="button" class="sa-btn" id="sa-nb-manual-add">Agregar manual</button>
+      </div>
+      <em>CID NetBox original · referencia usada ante el carrier · escalamiento del incidente son tres datos distintos. Buscar no modifica nada; guardar asocia.</em>
+    </div>
+</section>
+
 <% if %w[por_conciliar conciliado].include?(@sa_case.status) %>
 <section class="sa-panel" id="panel-d">
-<h3>C. Conciliación</h3>
+<h3>D. Conciliación</h3>
 <% if @evaluation.conciliation_applies != true %>
 <div class="sa-calc">La conciliación se habilita al marcar <strong>¿Aplica ANS? = Sí</strong> en la pestaña B.</div>
 <% end %>
@@ -217,7 +310,7 @@ function saMarkEmpty(){
 document.getElementById('sa-form').addEventListener('input',function(){saMarkEmpty();});
 saMarkEmpty();
 function saMin(a,b){if(!a||!b)return null;var ms=new Date(b)-new Date(a);if(isNaN(ms)||ms<=0)return null;return Math.round(ms/60000);}
-function saHuman(m){if(m==null)return '—';var h=Math.floor(m/60);return h>0?h+'h '+(m%60)+'m ('+m+' min)':m+' min';}
+function saHuman(m){if(m==null)return '—';var h=Math.floor(m/60);return h>0?h+'h '+(m%60)+'m':m+' min';}
 function saToLocal(v){if(!v)return '';var d=new Date(v.replace(' ','T'));if(isNaN(d))return '';var p=function(n){return (n<10?'0':'')+n;};return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes());}
 function saEl(id){return document.getElementById(id);}
 function saCalc(){
@@ -267,7 +360,7 @@ if(pullBoth){pullBoth.addEventListener('click',function(){
 });}
 function saApplyTabs(ts){
   if(!ts)return;
-  var map={'a':'panel-a','b':'panel-b','d':'panel-d','f':'panel-f'};
+  var map={'a':'panel-a','b':'panel-b','c':'panel-c','d':'panel-d','f':'panel-f'};
   Object.keys(map).forEach(function(k){
     var btn=document.querySelector('.sa-tabbar button[data-tab="'+map[k]+'"]');
     if(!btn)return;
@@ -309,7 +402,97 @@ if(btnConc)btnConc.addEventListener('click',function(e){
   var miss=saMissingB();
   if(miss.length){e.preventDefault();e.stopPropagation();saWarn(miss);}
 },true);
-// Transiciones por fetch: éxito recarga, error muestra advertencia flotante.
+// Circuitos NetBox (pestaña C, caché local solo lectura). Buscar no modifica; guardar asocia.
+var saNbIx = document.querySelectorAll('#sa-nb-chips .sa-nb-chip').length;
+function saNbEscape(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function saNbLinked(){
+  var ids={};
+  document.querySelectorAll('#sa-nb-chips input[name$="[nb_id]"]').forEach(function(h){if(h.value)ids['nb'+h.value]=1;});
+  document.querySelectorAll('#sa-nb-chips input[name$="[manual_cid]"]').forEach(function(h){if(h.value)ids['m'+h.value.toLowerCase()]=1;});
+  return ids;
+}
+function saNbTimeRow(ix,kind,st,en,note){
+  return '<div class="sa-nb-trow"><select name="circuit_intervals['+ix+'][][kind]">'
+    +[['tecnica','Técnica'],['degradacion','Degradación'],['exclusion','Exclusión'],['reconocida','Reconocida']].map(function(o){return '<option value="'+o[0]+'"'+(o[0]===kind?' selected':'')+'>'+o[1]+'</option>';}).join('')
+    +'</select><input type="datetime-local" name="circuit_intervals['+ix+'][][start_at]" value="'+saNbEscape(st||'')+'">'
+    +'<input type="datetime-local" name="circuit_intervals['+ix+'][][end_at]" value="'+saNbEscape(en||'')+'">'
+    +'<input type="text" name="circuit_intervals['+ix+'][][note]" value="'+saNbEscape(note||'')+'" placeholder="nota">'
+    +'<button type="button" data-rmtime title="Quitar">×</button></div>';
+}
+function saNbAddChip(d){
+  var linked=saNbLinked();
+  if(d.nb_id&&linked['nb'+d.nb_id])return;
+  if(d.manual_cid&&linked['m'+d.manual_cid.toLowerCase()])return;
+  var ix=saNbIx++;
+  var div=document.createElement('div');div.className='sa-nb-chip';div.setAttribute('data-ix',ix);
+  div.innerHTML='<span><strong>'+saNbEscape(d.label)+'</strong> · '+saNbEscape(d.sub)+(d.url?' · <a target="_blank" href="'+saNbEscape(d.url)+'">NetBox</a>':'')+'</span>'
+    +'<input type="text" name="circuit_links['+ix+'][carrier_ref]" value="'+saNbEscape(d.ref||'')+'" title="Identificador usado ante el carrier" placeholder="Ref. carrier">'
+    +'<input type="text" name="circuit_links['+ix+'][affected_capacity]" value="" title="Capacidad afectada conocida" placeholder="Cap. afectada">'
+    +'<input type="text" name="circuit_links['+ix+'][note]" value="" placeholder="nota / justificación">'
+    +'<button type="button" data-unlink title="Retirar">×</button>'
+    +'<input type="hidden" name="circuit_links['+ix+'][nb_id]" value="'+(d.nb_id||'')+'">'
+    +'<input type="hidden" name="circuit_links['+ix+'][manual_cid]" value="'+saNbEscape(d.manual_cid||'')+'">'
+    +'<div class="sa-nb-times" id="sa-times-'+ix+'"></div>'
+    +'<div class="sa-nb-tbtns"><button type="button" class="sa-mini" data-addtime="'+ix+'">＋ tiempo propio</button><button type="button" class="sa-mini" data-inherit="'+ix+'" title="Copiar inicio/fin a objetar de B">↙ heredar tiempos generales</button></div>';
+  document.getElementById('sa-nb-chips').appendChild(div);
+}
+document.getElementById('sa-nb-chips').addEventListener('click',function(e){
+  var t=e.target;
+  var un=t.closest? t.closest('[data-unlink]'):null;
+  if(un){var chip=t.closest? t.closest('.sa-nb-chip'):null;if(chip)chip.remove();return;}
+  var rm=t.closest? t.closest('[data-rmtime]'):null;
+  if(rm){var row=t.closest? t.closest('.sa-nb-trow'):null;if(row)row.remove();return;}
+  var add=t.closest? t.closest('[data-addtime]'):null;
+  if(add){var ix=add.getAttribute('data-addtime');var box=document.getElementById('sa-times-'+ix);if(box){var w=document.createElement('div');w.innerHTML=saNbTimeRow(ix,'tecnica','','','');box.appendChild(w.firstChild);}return;}
+  var inh=t.closest? t.closest('[data-inherit]'):null;
+  if(inh){
+    var ix2=inh.getAttribute('data-inherit');var box2=document.getElementById('sa-times-'+ix2);
+    var s=(document.getElementById('ev-contract-start')||{}).value||'',f=(document.getElementById('ev-contract-end')||{}).value||'';
+    if(box2){var w2=document.createElement('div');w2.innerHTML=saNbTimeRow(ix2,'tecnica',s,f,'heredado de B');box2.appendChild(w2.firstChild);}
+    return;
+  }
+});
+document.querySelectorAll('[data-goto]').forEach(function(b){
+  b.addEventListener('click',function(){
+    document.querySelectorAll('.sa-tabbar button').forEach(function(x){x.classList.remove('active');});
+    document.querySelectorAll('.sa-panel').forEach(function(p){p.classList.remove('active');});
+    var tab=document.querySelector('.sa-tabbar button[data-tab="'+b.getAttribute('data-goto')+'"]');
+    if(tab)tab.classList.add('active');
+    document.getElementById(b.getAttribute('data-goto')).classList.add('active');
+  });
+});
+var saNbTimer=null;
+var saNbQ=document.getElementById('sa-nb-q');
+if(saNbQ){saNbQ.addEventListener('input',function(){
+  clearTimeout(saNbTimer);
+  saNbTimer=setTimeout(function(){
+    var prov=(document.getElementById('evaluation_provider')||{}).value||'';
+    var box=document.getElementById('sa-nb-results');
+    var url='/service_assurance/cases/netbox_search?q='+encodeURIComponent(saNbQ.value)+'&provider='+encodeURIComponent(prov);
+    fetch(url,{credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest'}})
+    .then(function(r){return r.json();})
+    .then(function(j){
+      box.innerHTML='';
+      (j.rows||[]).forEach(function(r){
+        var d=document.createElement('div');d.className='sa-nb-row';
+        d.innerHTML='<span><strong>'+saNbEscape(r.cid)+'</strong> <small>'+saNbEscape(r.provider)+' · '+saNbEscape(r.capacity)+' · '+saNbEscape(r.type||'')+' · '+saNbEscape(r.status||'')+'<br>'+saNbEscape(r.description)+'</small></span>';
+        var b=document.createElement('button');b.type='button';b.className='sa-btn';b.textContent='Asociar';
+        b.addEventListener('click',function(){saNbAddChip({nb_id:r.nb_id,label:r.cid,sub:r.provider+' · '+r.capacity,url:r.url,ref:r.cid});});
+        d.appendChild(b);box.appendChild(d);
+      });
+      if(!(j.rows||[]).length)box.innerHTML='<small>Sin coincidencias en caché.</small>';
+    }).catch(function(){box.innerHTML='<small>Sin conexión con la caché.</small>';});
+  },300);
+});}
+var saNbManual=document.getElementById('sa-nb-manual-add');
+if(saNbManual){saNbManual.addEventListener('click',function(){
+  var cid=document.getElementById('sa-nb-manual-cid').value.trim();
+  var note=document.getElementById('sa-nb-manual-note').value.trim();
+  if(!cid||!note){saWarn(['Referencia manual requiere CID y justificación'],'Referencia manual','Complete ambos campos:');return;}
+  saNbAddChip({manual_cid:cid,label:cid,sub:'manual — pendiente de validación',ref:cid});
+  document.getElementById('sa-nb-manual-cid').value='';document.getElementById('sa-nb-manual-note').value='';
+});}
+// Envío de modales por fetch: éxito recarga, error muestra advertencia flotante
 document.querySelectorAll('.sa-flow button[data-t]').forEach(function(b){
   b.addEventListener('click',function(e){
     e.preventDefault();

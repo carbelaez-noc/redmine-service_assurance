@@ -5,6 +5,9 @@ RedmineApp::Application.routes.draw do
     get '/', to: 'service_assurance/cases#index', as: 'service_assurance'
     get '/cases', to: 'service_assurance/cases#index'
     get '/cases/export', to: 'service_assurance/cases#export'
+    get '/cases/netbox_search', to: 'service_assurance/cases#netbox_search'
+    post '/cases/netbox_sync', to: 'service_assurance/cases#netbox_sync'
+    post '/cases/netbox_token', to: 'service_assurance/cases#netbox_token'
     get '/cases/:id', to: 'service_assurance/cases#show', constraints: { id: /\d+/ }, as: 'service_assurance_case'
     post '/cases/open', to: 'service_assurance/cases#open'
     patch '/cases/:id', to: 'service_assurance/cases#update', constraints: { id: /\d+/ }
