@@ -45,11 +45,11 @@
 </p>
 <% end %>
 </fieldset>
-<fieldset><legend>Acceso al módulo (vacío = por permisos de proyecto; con selección = solo ellos + admins)</legend>
+<fieldset class="sa-roster"><legend>Acceso al módulo (vacío = por permisos de proyecto; con selección = solo ellos + admins)</legend>
 <p class="sa-roster-mode">Modo efectivo: <strong id="sa-roster-mode">—</strong></p>
 <div class="sa-duo">
   <div class="sa-duo-col">
-    <label>Disponibles (<span id="sa-av-n">0</span>)</label>
+    <div class="sa-duo-title">Disponibles (<span id="sa-av-n">0</span>)</div>
     <input type="search" id="sa-av-q" placeholder="Buscar nombre, apellido o login…" autocomplete="off">
     <select id="sa-av" multiple size="10" aria-label="Usuarios disponibles"></select>
     <em>Doble clic o Enter agrega. Sin Ctrl ni Shift.</em>
@@ -59,7 +59,7 @@
     <button type="button" id="sa-del" title="Retirar seleccionados">‹</button>
   </div>
   <div class="sa-duo-col">
-    <label>Autorizados (<span id="sa-au-n">0</span>)</label>
+    <div class="sa-duo-title">Autorizados (<span id="sa-au-n">0</span>)</div>
     <div id="sa-au" class="sa-au-list" role="listbox" aria-label="Usuarios autorizados" tabindex="0"></div>
     <em>Doble clic devuelve. × retira uno.</em>
   </div>
@@ -70,10 +70,11 @@
 <p><em>Solo los autorizados (más administradores) pueden ver y operar el módulo. Vacío = rige el sistema de permisos por proyecto/rol.</em></p>
 </fieldset>
 <style>
+.sa-roster label{float:none!important;width:auto!important;margin-left:0!important}
 .sa-duo{display:flex;gap:8px;align-items:stretch;margin:6px 0;flex-wrap:wrap}
 .sa-duo-col{flex:1 1 220px;min-width:0;display:flex;flex-direction:column;gap:4px}
 .sa-duo-col>*{min-width:0;max-width:100%}
-.sa-duo-col label{font-weight:bold;overflow-wrap:break-word}
+.sa-duo-title{font-weight:bold;overflow-wrap:break-word}
 .sa-duo-col select,.sa-au-list{border:1px solid #cfd4d9;border-radius:6px;min-height:180px;max-height:220px;overflow-y:auto;background:#fff;box-sizing:border-box}
 .sa-duo-col select{width:100%}
 .sa-duo-col input[type=search]{width:100%;box-sizing:border-box;border:1px solid #cfd4d9;border-radius:6px;padding:4px 8px}
